@@ -1,0 +1,16 @@
+{
+  "name": "2A Prints Accounting",
+  "short_name": "2A Accounting",
+  "description": "Invoicing, receipts, stock and accounts for Ghanaian SMEs.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f5c4f",
+  "theme_color": "#0f5c4f",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
