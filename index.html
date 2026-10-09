@@ -1413,6 +1413,9 @@ function tableForExport(tableId){
   // a CSV, an .xlsx sheet, or a printed page.
   const clone = table.cloneNode(true);
   clone.querySelectorAll("td,th").forEach(c=>{ if(c.querySelector("button")) c.remove(); });
+  // Drop the now-empty trailing header cell that sat above the action buttons.
+  clone.querySelectorAll("thead tr").forEach(r=>{ const l=r.lastElementChild; if(l && l.tagName==="TH" && !l.textContent.trim()) l.remove(); });
+  clone.querySelectorAll("tbody tr").forEach(r=>{ const l=r.lastElementChild; if(l && !l.textContent.trim() && +l.colSpan>1) l.colSpan=l.colSpan-1; });
   return clone;
 }
 function exportTableCsv(tableId, filename){
@@ -1958,7 +1961,7 @@ function viewProductMovement(id){
 
 /* ================= Sales Invoice ================= */
 let CART = []; // working line items for current invoice/purchase/order form
-let LIST_ORDER = {sales:"asc",purchases:"asc",receipts:"asc",payments:"asc",expenses:"asc",exppayments:"asc",journal:"asc",muljournal:"asc",salesorders:"desc",purchaseorders:"desc"};
+let LIST_ORDER = {sales:"desc",purchases:"desc",receipts:"desc",payments:"desc",expenses:"desc",exppayments:"desc",journal:"desc",muljournal:"desc",salesorders:"desc",purchaseorders:"desc"};
 function setListOrder(key, v, renderFn){ LIST_ORDER[key]=v; window[renderFn](); }
 function listOrderToggleHtml(key, renderFn){
   return `<select onchange="setListOrder('${key}',this.value,'${renderFn}')"><option value="asc" ${LIST_ORDER[key]==="asc"?"selected":""}>Ascending (Trans. ID)</option><option value="desc" ${LIST_ORDER[key]==="desc"?"selected":""}>Descending (Trans. ID)</option></select>`;
@@ -3287,7 +3290,7 @@ function renderExpensesTable(){
   document.getElementById("expTableWrap").innerHTML = rows.length ? `<table>
     <thead><tr><th>Trans ID</th><th>Invoice #</th><th>Date</th><th>Supplier</th><th>Category</th><th class="num">Total</th><th class="num">Balance</th><th></th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${esc(r.transId)}</td><td>${esc(r.invoiceNumber)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.supplierName||"-")}</td><td>${esc(r.categoryName)}</td><td class="num">${money(r.totalAmount)}</td><td class="num">${money(r.balance)}</td>
-      <td>${can('enterExpenses')?`<button class="btn small" onclick="expenseForm('${r.id}')">Edit</button> <button class="btn small danger" onclick="deleteExpense('${r.id}')">Delete</button>`:""}</td></tr>`).join("")}
+      <td><button class="btn small" onclick="printExpense('${r.id}')">Print</button> ${can('enterExpenses')?`<button class="btn small" onclick="expenseForm('${r.id}')">Edit</button> <button class="btn small danger" onclick="deleteExpense('${r.id}')">Delete</button>`:""}</td></tr>`).join("")}
     <tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="5">Total</td><td class="num">${money(rows.reduce((s,r)=>s+num(r.totalAmount),0))}</td><td class="num">${money(rows.reduce((s,r)=>s+num(r.balance),0))}</td><td></td></tr>
     </tbody></table>` : `<div class="empty">${terms.length?"Nothing matches your search":"No expenses yet"}</div>`;
 }
@@ -3421,7 +3424,7 @@ function renderExpPaymentsTable(){
     ${rows.map(r=>{ const ctx = paymentInvoiceContext(r,"expenses","exppayments");
       totInv += num(ctx.invoiceAmount); totPaid += num(r.paymentAmount); totOut += num(ctx.outstanding);
       return `<tr><td>${esc(r.transId)}</td><td>${esc(r.paymentNumber)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.supplierName||"-")}</td><td>${esc(r.invoiceNumber||"")}</td><td class="num">${moneyOrDash(ctx.invoiceAmount)}</td><td class="num">${money(r.paymentAmount)}</td><td class="num">${moneyOrDash(ctx.outstanding)}</td>
-      <td>${can('billPayment')?`<button class="btn small" onclick="expPaymentForm('${r.id}')">Edit</button> <button class="btn small danger" onclick="deleteExpPayment('${r.id}')">Delete</button>`:""}</td></tr>`; }).join("")}
+      <td><button class="btn small" onclick="printReceipt('exppayments','${r.id}')">Print</button> ${can('billPayment')?`<button class="btn small" onclick="expPaymentForm('${r.id}')">Edit</button> <button class="btn small danger" onclick="deleteExpPayment('${r.id}')">Delete</button>`:""}</td></tr>`; }).join("")}
     <tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="5">Total</td><td class="num">${money(totInv)}</td><td class="num">${money(totPaid)}</td><td class="num">${money(totOut)}</td><td></td></tr>
     </tbody></table>` : `<div class="empty">${terms.length?"Nothing matches your search":"No expense payments yet"}</div>`;
 }
@@ -3506,11 +3509,11 @@ VIEW_RENDERERS.journalEntry = function(view){
     <div class="toolbar">${listSearchBox('jSearch','Search journals…','renderJournalSearch')}${listOrderToggleHtml('journal','renderJournalTable')}${listOrderToggleHtml('muljournal','renderMulJournalTable')}</div>
     <div class="grid g2" style="min-height:0">
       <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-        <h3 style="margin:10px 0;flex:none">Single Entries</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;flex:none"><h3 style="margin:10px 0">Single Entries</h3><div class="actions">${listToolbarActionsHtml('jTableWrap','journal-entries','Journal Entries')}</div></div>
         <div class="panel" id="jTableWrap" style="flex:1;overflow-y:auto;min-height:0"></div>
       </div>
       <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
-        <h3 style="margin:10px 0;flex:none">Multi-line Entries</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;flex:none"><h3 style="margin:10px 0">Multi-line Entries</h3><div class="actions">${listToolbarActionsHtml('mjTableWrap','multi-line-journals','Multi-line Journals')}</div></div>
         <div class="panel" id="mjTableWrap" style="flex:1;overflow-y:auto;min-height:0"></div>
       </div>
     </div>`;
@@ -3523,7 +3526,7 @@ function renderJournalTable(){
   document.getElementById("jTableWrap").innerHTML = rows.length ? `<table>
     <thead><tr><th>Trans ID</th><th>#</th><th>Date</th><th>Debit</th><th>Credit</th><th>Party</th><th class="num">Amount</th><th></th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${esc(r.transId)}</td><td>${esc(r.journalNumber)}</td><td>${fmtDate(r.date)}</td><td>${esc(r.debitAccountName)}</td><td>${esc(r.creditAccountName)}</td><td>${esc(r.partyName||"")}</td><td class="num">${money(r.amount)}</td>
-      <td>${can('journalEntry')?`<button class="btn small" onclick="journalForm('${r.id}')">Edit</button> <button class="btn small danger" onclick="deleteJournal('${r.id}')">Delete</button>`:""}</td></tr>`).join("")}
+      <td><button class="btn small" onclick="printJournal('journal','${r.id}')">Print</button> ${can('journalEntry')?`<button class="btn small" onclick="journalForm('${r.id}')">Edit</button> <button class="btn small danger" onclick="deleteJournal('${r.id}')">Delete</button>`:""}</td></tr>`).join("")}
     <tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="6">Total</td><td class="num">${money(rows.reduce((s,r)=>s+num(r.amount),0))}</td><td></td></tr>
     </tbody></table>` : `<div class="empty">${terms.length?"Nothing matches your search":"No journal entries yet"}</div>`;
 }
@@ -3541,7 +3544,7 @@ function renderMulJournalTable(){
   document.getElementById("mjTableWrap").innerHTML = rows.length ? `<table>
     <thead><tr><th>Trans ID</th><th>#</th><th>Date</th><th>Lines</th><th class="num">Total</th><th></th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${esc(r.transId)}</td><td>${esc(r.journalNumber)}</td><td>${fmtDate(r.date)}</td><td>${r.lines.length}</td><td class="num">${money(r.lines.reduce((s,l)=>s+num(l.debit),0))}</td>
-      <td>${can('journalEntry')?`<button class="btn small" onclick="mulJournalForm('${r.id}')">Edit</button> <button class="btn small danger" onclick="deleteMulJournal('${r.id}')">Delete</button>`:""}</td></tr>`).join("")}
+      <td><button class="btn small" onclick="printJournal('muljournal','${r.id}')">Print</button> ${can('journalEntry')?`<button class="btn small" onclick="mulJournalForm('${r.id}')">Edit</button> <button class="btn small danger" onclick="deleteMulJournal('${r.id}')">Delete</button>`:""}</td></tr>`).join("")}
     <tr style="font-weight:700;border-top:2px solid var(--line)"><td colspan="4">Total</td><td class="num">${money(rows.reduce((s,r)=>s+r.lines.reduce((s2,l)=>s2+num(l.debit),0),0))}</td><td></td></tr>
     </tbody></table>` : `<div class="empty">${terms.length?"Nothing matches your search":"No multi-line journals yet"}</div>`;
 }
@@ -3963,6 +3966,7 @@ async function ensureNonCash(code){
 VIEW_RENDERERS.fixedAssets = function(view){
   view.innerHTML = `<div class="viewhead"><h2>Fixed Asset Register</h2>
       <div class="actions">
+        ${listToolbarActionsHtml('faTableWrap','fixed-asset-register','Fixed Asset Register')}
         ${can('fixedAssets')?`<button class="btn" onclick="runDepreciationForm()">Run Depreciation</button> <button class="btn primary" onclick="assetForm()">+ New Asset</button>`:""}
       </div>
     </div>
@@ -5270,6 +5274,82 @@ function printDoc(kind, id, opts){
   </body></html>`);
   win.document.close();
 }
+// Printable expense voucher/invoice (an expense entered against a supplier), same designs as invoices.
+function printExpense(id, opts){
+  opts = opts||{};
+  const design = opts.design || currentDesign();
+  const doc = opts.doc || byId(DB.expenses, id); if(!doc) return;
+  const party = opts.party || byId(DB.suppliers, doc.supplierId);
+  const isCash = doc.type==="Cash Expense";
+  const bal = num(doc.balance), paid = num(doc.paymentAmount);
+  const badge = bal<=0.005 ? `<span class="badge paid">Paid</span>` : paid>0.005 ? `<span class="badge part">Partially Paid</span>` : `<span class="badge unpaid">Unpaid</span>`;
+  const levy = (label,v)=> v ? `<div class="row"><span>${label}</span><span>${money(v)}</span></div>` : "";
+  const win = window.open("","_blank");
+  win.document.write(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>EXPENSE ${esc(doc.invoiceNumber)}</title>${docPrintStyles()}</head><body>
+    ${printPreviewChrome("EXPENSE_"+doc.invoiceNumber+".pdf")}
+    <div class="sheet d-${design}">
+      ${docCompanyHeader("EXPENSE", `Ref. <b>${esc(doc.invoiceNumber)}</b>`, badge)}
+      <div class="meta">
+        ${docPartyBlock(party, doc.supplierName, "Supplier")}
+        <div class="card"><div class="lbl">Details</div>
+          <div class="kv"><span>Date</span><b>${fmtDate(doc.date)}</b></div>
+          <div class="kv"><span>Type</span><b>${esc(doc.type||"")}</b></div>
+          ${!isCash&&doc.dueDate?`<div class="kv"><span>Due Date</span><b>${fmtDate(doc.dueDate)}</b></div>`:""}
+          ${doc.transId?`<div class="kv"><span>Trans ID</span><b>${esc(doc.transId)}</b></div>`:""}
+        </div>
+      </div>
+      <table class="items"><thead><tr><th style="width:34px">#</th><th style="width:90px">Code</th><th>Expense Account</th><th class="num" style="width:120px">Amount</th></tr></thead><tbody>
+        <tr><td style="color:var(--muted)">1</td><td class="code">${esc(doc.categoryCode||"")}</td><td>${esc(doc.categoryName||"")}${doc.narration?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px">${esc(doc.narration)}</div>`:""}</td><td class="num">${money(doc.amount)}</td></tr>
+      </tbody></table>
+      <div class="bottom">
+        <div class="words"><b>Amount in Words</b><i>${esc(spellNumber(doc.netAmount))}</i></div>
+        <div class="totals">
+          <div class="row"><span>Sub Total</span><span>${money(doc.amount)}</span></div>
+          ${levy("NHIL",doc.nhil)}${levy("GETFund",doc.getfund)}${levy("Covid Levy",doc.covid)}${levy("VAT",doc.vat)}
+          ${doc.cashDiscount?`<div class="row"><span>Cash Discount</span><span>-${money(doc.cashDiscount)}</span></div>`:""}
+          <div class="grand"><span>Net Amount</span><span>${money(doc.netAmount)}</span></div>
+          ${paid>0.005?`<div class="row" style="margin-top:8px"><span>Amount Paid</span><span>${money(doc.paymentAmount)}</span></div><div class="due"><span>Balance Due</span><span>${money(doc.balance)}</span></div>`:""}
+        </div>
+      </div>
+      ${docSignatories("Prepared By","Approved By / Manager")}
+    </div>
+  </body></html>`);
+  win.document.close();
+}
+// Printable journal voucher (single or multi-line), same designs as invoices, with Print / Save as PDF.
+function printJournal(kind, id){
+  const doc = byId(DB[kind], id); if(!doc) return;
+  const design = currentDesign();
+  const acctName = c => { const a = accByCode(c); return a ? a.name : (c||""); };
+  const lines = kind==="journal"
+    ? [{accountCode:doc.debitAccountCode, accountName:doc.debitAccountName, debit:doc.amount, credit:0},
+       {accountCode:doc.creditAccountCode, accountName:doc.creditAccountName, debit:0, credit:doc.amount}]
+    : (doc.lines||[]).map(l=>({accountCode:l.accountCode, accountName:acctName(l.accountCode), debit:num(l.debit), credit:num(l.credit)}));
+  const totD = lines.reduce((s,l)=>s+num(l.debit),0), totC = lines.reduce((s,l)=>s+num(l.credit),0);
+  const win = window.open("","_blank");
+  win.document.write(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>JOURNAL VOUCHER ${esc(doc.journalNumber)}</title>${docPrintStyles()}</head><body>
+    ${printPreviewChrome("JOURNAL_VOUCHER_"+doc.journalNumber+".pdf")}
+    <div class="sheet d-${design}">
+      ${docCompanyHeader("JOURNAL VOUCHER", `No. <b>${esc(doc.journalNumber)}</b>`, "")}
+      <div class="meta">
+        <div class="card"><div class="lbl">Narration</div><div class="sm" style="font-size:13px;color:var(--ink)">${esc(doc.narration||"—")}</div>${doc.partyName?`<div class="sm" style="margin-top:6px">Party: ${esc(doc.partyName)}</div>`:""}</div>
+        <div class="card"><div class="lbl">Details</div>
+          <div class="kv"><span>Date</span><b>${fmtDate(doc.date)}</b></div>
+          ${doc.transId?`<div class="kv"><span>Trans ID</span><b>${esc(doc.transId)}</b></div>`:""}
+        </div>
+      </div>
+      <table class="items"><thead><tr><th style="width:34px">#</th><th style="width:90px">Code</th><th>Account</th><th class="num" style="width:120px">Debit</th><th class="num" style="width:120px">Credit</th></tr></thead><tbody>
+        ${lines.map((l,i)=>`<tr><td style="color:var(--muted)">${i+1}</td><td class="code">${esc(l.accountCode||"")}</td><td>${esc(l.accountName||"")}</td><td class="num">${l.debit?money(l.debit):""}</td><td class="num">${l.credit?money(l.credit):""}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="bottom">
+        <div class="words"><b>Amount in Words</b><i>${esc(spellNumber(totD))}</i></div>
+        <div class="totals"><div class="grand"><span>Total</span><span>${money(totD)} / ${money(totC)}</span></div></div>
+      </div>
+      ${docSignatories("Prepared By","Approved By / Manager")}
+    </div>
+  </body></html>`);
+  win.document.close();
+}
 // Printable receipt (money received from a customer) or payment voucher (money paid to a supplier).
 function printReceipt(kind, id, opts){
   opts = opts||{};
@@ -5280,7 +5360,8 @@ function printReceipt(kind, id, opts){
   const party = opts.party || (isReceipt ? byId(DB.customers, doc.customerId) : byId(DB.suppliers, doc.supplierId));
   const docNumber = isReceipt ? doc.receiptNumber : doc.paymentNumber;
   const label = isReceipt ? "RECEIPT" : "PAYMENT VOUCHER";
-  const ctx = opts.ctx || paymentInvoiceContext(doc, isReceipt?"sales":"purchases", isReceipt?"receipts":"payments");
+  const isExpPay = kind==="exppayments";
+  const ctx = opts.ctx || (isExpPay ? paymentInvoiceContext(doc, "expenses", "exppayments") : paymentInvoiceContext(doc, isReceipt?"sales":"purchases", isReceipt?"receipts":"payments"));
   const msg = isReceipt ? SETTINGS.messages.receipt : "";
   const win = window.open("","_blank");
   win.document.write(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>${label} ${esc(docNumber)}</title>${docPrintStyles()}</head><body>
