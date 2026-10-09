@@ -1019,7 +1019,28 @@ async function afterAuthSuccess(authUser){
   });
   const remembered = localStorage.getItem("acct2a_last_company_"+authUser.id);
   const target = MY_MEMBERSHIPS.find(m=>m.company_id===remembered) || MY_MEMBERSHIPS.find(m=>m.role==="owner") || MY_MEMBERSHIPS[0];
-  const ok = await loadCompany(target.company_id, err);
+  // If the preferred company's licence has run out, don't lock the person out while another
+  // company they belong to is still usable — try the others (owned ones first) before giving up.
+  const order = [target].concat(
+    MY_MEMBERSHIPS.filter(m=>m!==target && m.role==="owner"),
+    MY_MEMBERSHIPS.filter(m=>m!==target && m.role!=="owner"));
+  let ok = false, expiredFirst = null;
+  for(const m of order){
+    const r = await loadCompany(m.company_id, err, {soft:true});
+    if(r==="expired"){ if(!expiredFirst) expiredFirst = m; continue; }
+    ok = r;
+    if(ok && expiredFirst){
+      enterApp(findOrLinkTeamUser(authUser), authUser);
+      toast(`The licence for "${expiredFirst.name}" has expired — opened "${m.name}" instead.`, true);
+      return;
+    }
+    break;
+  }
+  if(!ok && expiredFirst && !err?.textContent){ // every company is expired: show the registration screen for the preferred one
+    CURRENT_COMPANY_ID = expiredFirst.company_id;
+    showBillingRequired();
+    return;
+  }
   if(ok) enterApp(findOrLinkTeamUser(authUser), authUser);
 }
 
@@ -1027,10 +1048,16 @@ async function afterAuthSuccess(authUser){
 // "invited" membership on its first use, and remembering the choice for next time. Shared by
 // afterAuthSuccess (first login) and switchCompany (below) — companyId must already be one of
 // MY_MEMBERSHIPS. Returns false (and leaves the UI on an error/billing screen) on failure.
-async function loadCompany(companyId, err){
+async function loadCompany(companyId, err, opts){
+  const prevCompanyId = CURRENT_COMPANY_ID;
   CURRENT_COMPANY_ID = companyId;
   const { data: company } = await sb.from("companies").select("*").eq("id", CURRENT_COMPANY_ID).maybeSingle();
-  if(company && !isSubscriptionUsable(company)){ showBillingRequired(); return false; }
+  if(company && !isSubscriptionUsable(company)){
+    // Soft mode: report "expired" and put everything back as it was, so the caller can pick another
+    // company or just stay where the person is — nothing about the running session changes.
+    if(opts && opts.soft){ CURRENT_COMPANY_ID = prevCompanyId; return "expired"; }
+    showBillingRequired(); return false;
+  }
   if(company){ applyCompanyInfo(company); }
   const result = await Store.loadAll();
   if(!result.ok){ if(err) err.textContent = "Signed in, but couldn't load your data. Check your connection and try again."; return false; }
@@ -1049,8 +1076,20 @@ async function loadCompany(companyId, err){
 async function switchCompany(companyId){
   if(companyId===CURRENT_COMPANY_ID){ closeModal(); return; }
   closeModal();
-  const ok = await loadCompany(companyId, null);
-  if(!ok) return; // loadCompany already put the user on an error or billing screen
+  const prevCompanyId = CURRENT_COMPANY_ID;
+  const target = MY_MEMBERSHIPS.find(m=>m.company_id===companyId) || {};
+  const ok = await loadCompany(companyId, null, {soft:true});
+  if(ok==="expired"){
+    if(target.role==="owner"){
+      // The owner can renew it: show the registration screen, with a way back to the company they were in.
+      CURRENT_COMPANY_ID = companyId;
+      showBillingRequired(prevCompanyId);
+    } else {
+      toast(`The licence for "${target.name||"that company"}" has expired. Please ask its owner to renew it.`, true);
+    }
+    return; // either way, the person keeps working in the company they were already in
+  }
+  if(!ok) return; // loadCompany already put the user on an error screen
   CURRENT_USER = findOrLinkTeamUser(AUTH_USER) || { id:"U0", username: AUTH_USER.email, roleId: DB.roles[0]?.id };
   const name = (MY_MEMBERSHIPS.find(m=>m.company_id===companyId)||{}).name || "";
   document.getElementById("curUserName").textContent = CURRENT_USER.username;
@@ -1133,15 +1172,22 @@ function registrationFormHtml(inApp, reason){
     <div style="color:var(--muted);font-size:12px;margin-top:12px;text-align:center">Need a license key? Contact the developer on <b>${esc(DEVELOPER_EMAIL)}</b>.</div>`;
 }
 
-async function showBillingRequired(){
+async function showBillingRequired(backCompanyId){
   const loginScreen = document.getElementById("loginScreen");
+  const back = backCompanyId ? (MY_MEMBERSHIPS.find(m=>m.company_id===backCompanyId)||null) : null;
   loginScreen.innerHTML = `<div class="card">
     <h1>2A PRINTS ACCOUNTING</h1>
     <div class="sub">Registration required</div>
     ${registrationFormHtml(false, "Your trial or license has ended. Enter your license key to continue.")}
-    <div style="text-align:center;margin-top:14px"><a href="#" onclick="logout();return false" style="color:var(--accent)">Sign out</a></div>
+    <div style="text-align:center;margin-top:14px">${back?`<a href="#" onclick="backFromBilling('${back.company_id}');return false" style="color:var(--accent)">← Back to ${esc(back.name)}</a> &nbsp;·&nbsp; `:""}<a href="#" onclick="logout();return false" style="color:var(--accent)">Sign out</a></div>
   </div>`;
   loginScreen.classList.remove("hidden");
+}
+// Leaves the registration screen and returns to the company the person was working in.
+async function backFromBilling(companyId){
+  document.getElementById("loginScreen").classList.add("hidden");
+  CURRENT_COMPANY_ID = null;
+  await switchCompany(companyId);
 }
 
 // Sends the registration to the webhook. In the desktop app this goes through the main process
