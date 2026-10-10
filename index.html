@@ -117,6 +117,13 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-wei
    every transaction list (Sales/Purchase Orders & Invoices, Receipts, Payments, Expenses, Journal)
    all use the exact same pattern. */
 #view.fixedhead table thead th{position:sticky;top:0;background:var(--panel);z-index:1}
+/* Invoice list on the payment forms: about five rows tall, scrolls inside itself with a pinned header. */
+/* Date / Amount / Withholding / Method stay pinned to the bottom of the payment form while the invoice list above scrolls. */
+.paybar{position:sticky;bottom:-1px;z-index:3;background:var(--panel);border-top:1px solid var(--line);margin-top:8px;padding:10px 0 2px;display:grid;grid-template-columns:repeat(var(--cols,4),1fr);gap:12px}
+.paybar .field{margin-bottom:6px}
+.invscroll{max-height:200px;overflow-y:auto;position:relative;border:1px solid var(--line);border-radius:8px}
+.invscroll table thead th{position:sticky;top:0;background:var(--panel);z-index:1}
+.invscroll tr.picked td{background:var(--accent-soft,rgba(15,92,79,.12));font-weight:600}
 .viewhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 .viewhead h2{font-size:19px}
 .viewhead .actions{display:flex;gap:8px}
@@ -131,6 +138,8 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-wei
 .modal.wide{width:min(1120px,100%)}
 .modal .mhead{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
 .modal .mbody{padding:20px;max-height:70vh;overflow-y:auto}
+.modal-bg:has(.paybar){padding:16px 20px}
+.modal:has(.paybar) .mbody{max-height:calc(100vh - 150px)}
 .modal .mfoot{padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
 /* type-to-search pickers (customers, suppliers) */
 .ss-wrap{position:relative}
@@ -185,6 +194,7 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-wei
   #topbar .status{font-size:0}                      /* keep the green/red dot, drop the long label */
   #view{padding:14px 12px calc(14px + env(safe-area-inset-bottom))}
   .g2,.g3{grid-template-columns:1fr}
+  .paybar{grid-template-columns:repeat(2,1fr);bottom:64px}
   .panel{overflow-x:auto;-webkit-overflow-scrolling:touch}
   #view table,.modal table{min-width:540px}
   .toolbar{gap:8px}
@@ -315,7 +325,7 @@ const SEED_ROLES = [
   {id:"ROLE2", name:"Manager", description:"Access to all except Admin Sheet", permissions:Object.assign(allPerm("View"),{admin:"No Access",salesInvoice:"Edit",salesReceipt:"Edit",purchaseInvoice:"Edit",makePayment:"Edit",enterExpenses:"Edit",billPayment:"Edit",journalEntry:"Edit",salesOrder:"Edit",purchaseOrder:"Edit"})},
   {id:"ROLE3", name:"Data Entry Officer", description:"Limited access to transaction sheets.", permissions:allPerm("No Access")}
 ];
-function allPerm(v){return {admin:v,customers:v,suppliers:v,accounts:v,products:v,salesOrder:v,salesInvoice:v,salesReceipt:v,purchaseOrder:v,purchaseInvoice:v,makePayment:v,enterExpenses:v,billPayment:v,journalEntry:v,viewLedgers:v,bankRecon:v,fixedAssets:v,reports:v};}
+function allPerm(v){return {admin:v,customers:v,suppliers:v,accounts:v,products:v,salesOrder:v,salesInvoice:v,salesReceipt:v,purchaseOrder:v,purchaseInvoice:v,makePayment:v,enterExpenses:v,billPayment:v,journalEntry:v,viewLedgers:v,bankRecon:v,fixedAssets:v,stockTake:v,reports:v};}
 
 // No password here anymore — real sign-in is Supabase Auth. The first person to sign in for a brand
 // new company automatically claims this record (see findOrLinkTeamUser), which sets authUserId/email/
@@ -357,7 +367,7 @@ const SEED_SETTINGS = {
     outputCovid:"COV0002", salesIncome:"SALE0001", inventory:"INVE0001", accruedExpense:"EXPE0001",
     purchasesAccount:"INVE0001", salesDiscount:"DISC0001", purchasesDiscount:"DISC0002", expensesDiscount:"DISC0002",
     costOfSales:"COST0001", outputVAT:"VAT0001", inputVAT:"VAT0002", inputNHIL:"NHIL0001", inputGetFund:"GET0001",
-    inputCovid:"COV0001", debtorsWHT:"WHT0007", creditorsWHT:"WHT0000", cash:"CASH0001", bank:"BANK0001", vatWithholding:"VWH0001" },
+    inputCovid:"COV0001", debtorsWHT:"WHT0007", creditorsWHT:"WHT0000", cash:"CASH0001", bank:"BANK0001", vatWithholding:"VWH0001", stockAdjustment:"STOC0001" },
   whtPresets:{
     debtors:[{account:"WHT0007",pct:0},{account:"WHT0001",pct:3},{account:"WHT0002",pct:5},{account:"WHT0003",pct:7.5}],
     creditors:[{account:"WHT0000",pct:0},{account:"WHT0004",pct:3},{account:"WHT0005",pct:5},{account:"WHT0006",pct:7.5}]
@@ -375,10 +385,13 @@ const SEED_SETTINGS = {
   messages:{ invoice:"Thank you from buying from us.", receipt:"See you soon" },
   printDesign:"modern",
   logoShow:true, logoSize:"medium",
-  nextNumbers:{ salesInvoice:1, salesReceipt:1, purchaseInvoice:1, purchaseReceipt:1, expenseInvoice:1, expenseReceipt:1, journal:1, mulJournal:1, salesOrder:1, purchaseOrder:1 },
+  nextNumbers:{ salesInvoice:1, salesReceipt:1, purchaseInvoice:1, purchaseReceipt:1, expenseInvoice:1, expenseReceipt:1, journal:1, mulJournal:1, salesOrder:1, purchaseOrder:1, stockTake:1 },
   nextTransactionId: 1,
   productTypes:["Inventory","Non Inventory"], customerTypes:["Retail","Wholesale"], supplierTypes:["Expenses Supplier","Inventory Supplier"],
   locations:["Main Store"],
+  // Reasons offered on Stock Take lines and Quick Adjustments. applies: "out" = write-offs (stock reduced),
+  // "in" = increases, "both" = either. Managed in Admin > Accounts Settings and Defaults.
+  stockAdjReasons:[{label:"Count correction",applies:"both"},{label:"Damaged",applies:"out"},{label:"Expired",applies:"out"},{label:"Lost / Missing",applies:"out"},{label:"Theft",applies:"out"},{label:"Found / Unrecorded",applies:"in"},{label:"Other",applies:"both"}],
   paymentMethods:[{label:"Cash Account",account:"CASH0001"},{label:"Bank Account",account:"BANK0001"}],
   dueDateTerms:[{label:"Net 30",days:30},{label:"Net 60",days:60},{label:"Net 90",days:90},{label:"Net 120",days:120}],
   supabaseUrl:"", supabaseKey:""
@@ -398,7 +411,7 @@ function hydrateSettings(s){
 function today(){ return new Date().toISOString().slice(0,10); }
 
 /* ---------------- Store (Supabase only — no local-storage data fallback) ---------------- */
-const TABLES = ["accounts","customers","suppliers","products","sales","purchases","salesorders","purchaseorders","journal","muljournal","ledger","receipts","payments","expenses","exppayments","users","roles","bankrecon","fixedassets"];
+const TABLES = ["accounts","customers","suppliers","products","sales","purchases","salesorders","purchaseorders","journal","muljournal","ledger","receipts","payments","expenses","exppayments","users","roles","bankrecon","fixedassets","stocktakes"];
 let DB = {}; // in-memory cache: DB.accounts = [...]
 let MISSING_TABLES = new Set(); // tables whose acct_<table> doesn't exist yet in Supabase (SQL not run yet)
 let SETTINGS = null;
@@ -510,6 +523,7 @@ const Store = {
       if(r.permissions.purchaseOrder===undefined){ r.permissions.purchaseOrder = r.permissions.purchaseInvoice||"No Access"; rolesBackfilled=true; }
       if(r.permissions.bankRecon===undefined){ r.permissions.bankRecon = r.permissions.viewLedgers||"No Access"; rolesBackfilled=true; }
       if(r.permissions.fixedAssets===undefined){ r.permissions.fixedAssets = r.permissions.accounts||"No Access"; rolesBackfilled=true; }
+      if(r.permissions.stockTake===undefined){ r.permissions.stockTake = r.permissions.products||"No Access"; rolesBackfilled=true; }
     });
     if(rolesBackfilled) await Store.saveAll("roles");
     // Backfill the Cash Flow Statement's Non-Cash flag for installs saved before it existed — never
@@ -883,7 +897,7 @@ const NAV = [
   {group:"Sales", items:[["salesOrder","🗒️","Sales Order","salesOrder"],["salesInvoice","🧾","Sales Invoice","salesInvoice"],["salesReceipt","💰","Receive Payment","salesReceipt"],["customers","👥","Customers","customers"]]},
   {group:"Purchases", items:[["purchaseOrder","🗒️","Purchase Order","purchaseOrder"],["purchaseInvoice","📦","Purchase Invoice","purchaseInvoice"],["makePayment","💸","Make Payment","makePayment"],["suppliers","🏭","Suppliers","suppliers"]]},
   {group:"Expenses", items:[["enterExpenses","🧮","Enter Expenses","enterExpenses"],["billPayment","💵","Pay Expense","billPayment"]]},
-  {group:"General", items:[["products","🏷️","Products","products"],["accounts","📚","Chart of Accounts","accounts"],["journalEntry","📝","Journal Entry","journalEntry"],["viewLedgers","📒","Ledger","viewLedgers"],["bankRecon","🏦","Bank Reconciliation","bankRecon"],["fixedAssets","🏭","Fixed Assets","fixedAssets"]]},
+  {group:"General", items:[["products","🏷️","Products","products"],["stockTake","📋","Stock Take","stockTake"],["accounts","📚","Chart of Accounts","accounts"],["journalEntry","📝","Journal Entry","journalEntry"],["viewLedgers","📒","Ledger","viewLedgers"],["bankRecon","🏦","Bank Reconciliation","bankRecon"],["fixedAssets","🏭","Fixed Assets","fixedAssets"]]},
   {group:"Reports", items:[["reports","📈","Reports","reports"]]},
   {group:"System", items:[["admin","⚙️","Admin / Settings","admin"]]}
 ];
@@ -927,7 +941,7 @@ function navigate(key){
   // gets a scrollbar. Every other view keeps the plain "whole view scrolls" behavior, unaffected.
   const FIXEDHEAD_VIEWS = ["viewLedgers","admin","accounts","customers","suppliers","products",
     "salesOrder","salesInvoice","purchaseOrder","purchaseInvoice","salesReceipt","makePayment",
-    "enterExpenses","billPayment","journalEntry","reports","bankRecon","fixedAssets"];
+    "enterExpenses","billPayment","journalEntry","reports","bankRecon","fixedAssets","stockTake"];
   view.classList.toggle("fixedhead", FIXEDHEAD_VIEWS.includes(key));
   if(fn) fn(view); else view.innerHTML = `<div class="empty">Coming up…</div>`;
 }
@@ -3086,22 +3100,36 @@ function renderInvoicePicker(kind){
   const c = PAY_CFG[kind];
   const partyId = document.getElementById(c.sel).value;
   fillInvoiceSelect(kind);
-  document.getElementById(c.list).innerHTML = partyId
-    ? invoiceListHtml(kind, partyId, c.partyField)
-    : `<div class="empty">Select a ${c.noun}, or pick an invoice from the dropdown above</div>`;
+  renderPayInvoiceList(kind);
   document.getElementById(c.panel).innerHTML = selectedInvoicePanelHtml(kind, c.edit());
 }
+// The party's invoices sit in a box that shows about five rows and scrolls inside itself, so the Date,
+// Amount and Withholding fields below stay on screen. Newest first by default, switchable to oldest first.
+let PAY_INV_ORDER = "desc";
+function renderPayInvoiceList(kind){
+  const c = PAY_CFG[kind]; const el = document.getElementById(c.list); if(!el) return;
+  const partyId = document.getElementById(c.sel).value;
+  if(!partyId){ el.innerHTML = `<div class="empty">Select a ${c.noun}, or pick an invoice from the dropdown above</div>`; return; }
+  el.innerHTML = invoiceListHtml(kind, partyId, c.partyField);
+  const box = el.querySelector(".invscroll"), sel = el.querySelector("tr.picked");
+  if(box && sel){ box.scrollTop = Math.max(0, sel.offsetTop - box.clientHeight/2); }   // keep the chosen invoice in view
+}
+function setPayInvOrder(kind, v){ PAY_INV_ORDER = v; renderPayInvoiceList(kind); }
 function invoiceListHtml(table, partyId, partyField, query){
   const q = String(query||"").trim().toLowerCase();
   let docs = DB[table].filter(d=>!partyId || d[partyField]===partyId);
   if(q) docs = docs.filter(d=>[d.invoiceNumber, d.date, fmtDate(d.date), d.netAmount, money(d.netAmount), d.balance, money(d.balance), invPartyName(d,partyField)].join(" ").toLowerCase().includes(q));
-  docs.sort((a,b)=>a.date<b.date?1:-1);
+  docs.sort((a,b)=> (a.date===b.date ? 0 : (a.date<b.date?-1:1)) || (num(a.transId)-num(b.transId)));
+  if(PAY_INV_ORDER!=="asc") docs.reverse();
   if(!docs.length) return `<div class="empty">${q?"No invoices match your search":"No invoices for this account"}</div>`;
   const showParty = !partyId, shown = docs.slice(0,100);
-  return `<table><tr><th>Date</th><th>Invoice #</th>${showParty?`<th>${partyField==="customerId"?"Customer":"Supplier"}</th>`:""}<th class="num">Net Amount</th><th class="num">Payment</th><th class="num">Balance</th><th></th></tr>
-    ${shown.map(d=>`<tr class="${PAY_SELECTED&&PAY_SELECTED.invoiceNumber===d.invoiceNumber?'chip':''}"><td>${fmtDate(d.date)}</td><td>${esc(d.invoiceNumber)}</td>${showParty?`<td>${esc(invPartyName(d,partyField))}</td>`:""}<td class="num">${money(d.netAmount)}</td><td class="num">${money(d.paymentAmount)}</td><td class="num">${money(d.balance)}</td>
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:12.5px;color:var(--muted)">
+      <span>${docs.length} invoice${docs.length===1?"":"s"} — scroll the list to see more</span>
+      <select onchange="setPayInvOrder('${table}',this.value)" style="width:auto"><option value="desc" ${PAY_INV_ORDER!=="asc"?"selected":""}>Newest first</option><option value="asc" ${PAY_INV_ORDER==="asc"?"selected":""}>Oldest first</option></select></div>
+    <div class="invscroll"><table><thead><tr><th>Date</th><th>Invoice #</th>${showParty?`<th>${partyField==="customerId"?"Customer":"Supplier"}</th>`:""}<th class="num">Net Amount</th><th class="num">Payment</th><th class="num">Balance</th><th></th></tr></thead><tbody>
+    ${shown.map(d=>`<tr class="${PAY_SELECTED&&PAY_SELECTED.invoiceNumber===d.invoiceNumber?'picked':''}"><td>${fmtDate(d.date)}</td><td>${esc(d.invoiceNumber)}</td>${showParty?`<td>${esc(invPartyName(d,partyField))}</td>`:""}<td class="num">${money(d.netAmount)}</td><td class="num">${money(d.paymentAmount)}</td><td class="num">${money(d.balance)}</td>
       <td><button class="btn small" onclick="selectInvoiceForPayment('${table}','${esc(d.invoiceNumber)}')">Select</button></td></tr>`).join("")}
-    </table>${docs.length>shown.length?`<div class="empty">Showing the first ${shown.length} of ${docs.length}. Type more to narrow it down.</div>`:""}`;
+    </tbody></table></div>${docs.length>shown.length?`<div class="empty">Showing the first ${shown.length} of ${docs.length}. Type more to narrow it down.</div>`:""}`;
 }
 function selectedInvoicePanelHtml(kind, editId){
   if(!PAY_SELECTED) return `<div class="empty">Select an invoice above to pay against it</div>`;
@@ -3143,13 +3171,13 @@ function receiptForm(editId){
     <div class="field"><label>Invoice</label><select id="r_inv" onchange="onInvoicePick('sales')"></select></div>
     <div id="r_invoices" style="margin:10px 0"></div>
     <div id="r_selectedPanel" style="margin-bottom:10px"></div>
-    <div class="grid g2">
+    <div class="paybar">
       <div class="field"><label>Date</label><input id="r_date" type="date" value="${existing?existing.date:today()}"></div>
       <div class="field"><label>Amount Received</label><input id="r_amt" type="number" step="0.01" value="${existing?existing.paymentAmount:0}"></div>
       <div class="field"><label>WithHolding Tax</label><select id="r_wht">${whtPresetOptions('debtors')}</select></div>
       <div class="field"><label>Payment Method</label><select id="r_acct">${paymentMethodOptions()}</select></div>
-      <div class="field"><label>Reference</label><input id="r_ref" value="${existing?esc(existing.reference||""):""}"></div>
     </div>
+    <div class="field" style="margin-top:10px"><label>Reference</label><input id="r_ref" value="${existing?esc(existing.reference||""):""}"></div>
     <div class="field"><label>Narration</label><input id="r_narr" value="${existing?esc(existing.narration||""):""}"></div>
   `, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="submitReceipt(false)">Save &amp; New</button><button class="btn primary" onclick="submitReceipt(true)">Save &amp; Close</button>`, true);
   const custId = existing ? existing.customerId : "";
@@ -3263,13 +3291,13 @@ function paymentForm(editId){
     <div class="field"><label>Invoice</label><select id="pm_inv" onchange="onInvoicePick('purchases')"></select></div>
     <div id="pm_invoices" style="margin:10px 0"></div>
     <div id="pm_selectedPanel" style="margin-bottom:10px"></div>
-    <div class="grid g2">
+    <div class="paybar">
       <div class="field"><label>Date</label><input id="pm_date" type="date" value="${existing?existing.date:today()}"></div>
       <div class="field"><label>Amount Paid</label><input id="pm_amt" type="number" step="0.01" value="${existing?existing.paymentAmount:0}"></div>
       <div class="field"><label>WithHolding Tax</label><select id="pm_wht">${whtPresetOptions('creditors')}</select></div>
       <div class="field"><label>Payment Method</label><select id="pm_acct">${paymentMethodOptions(SETTINGS.defaultAccounts.bank)}</select></div>
-      <div class="field"><label>Reference</label><input id="pm_ref" value="${existing?esc(existing.reference||""):""}"></div>
     </div>
+    <div class="field" style="margin-top:10px"><label>Reference</label><input id="pm_ref" value="${existing?esc(existing.reference||""):""}"></div>
     <div class="field"><label>Narration</label><input id="pm_narr" value="${existing?esc(existing.narration||""):""}"></div>
   `, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="submitPayment(false)">Save &amp; New</button><button class="btn primary" onclick="submitPayment(true)">Save &amp; Close</button>`, true);
   const suppId = existing ? existing.supplierId : "";
@@ -3494,12 +3522,12 @@ function expPaymentForm(editId){
     <div class="field"><label>Expense Invoice</label><select id="ep_inv" onchange="onInvoicePick('expenses')"></select></div>
     <div id="ep_invoices" style="margin:10px 0"></div>
     <div id="ep_selectedPanel" style="margin-bottom:10px"></div>
-    <div class="grid g2">
+    <div class="paybar" style="--cols:3">
       <div class="field"><label>Date</label><input id="ep_date" type="date" value="${existing?existing.date:today()}"></div>
       <div class="field"><label>Amount Paid</label><input id="ep_amt" type="number" step="0.01" value="${existing?existing.paymentAmount:0}"></div>
       <div class="field"><label>Payment Method</label><select id="ep_acct">${paymentMethodOptions(SETTINGS.defaultAccounts.bank)}</select></div>
     </div>
-    <div class="field"><label>Narration</label><input id="ep_narr" value="${existing?esc(existing.narration||""):""}"></div>
+    <div class="field" style="margin-top:10px"><label>Narration</label><input id="ep_narr" value="${existing?esc(existing.narration||""):""}"></div>
   `, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="submitExpPayment(false)">Save &amp; New</button><button class="btn primary" onclick="submitExpPayment(true)">Save &amp; Close</button>`, true);
   const suppId = existing ? existing.supplierId : "";
   updateCodeNameFields('ep_supp',DB.suppliers,'ep_supp');
@@ -3990,6 +4018,505 @@ async function deleteBankReconSession(id){
   await Store.remove("bankrecon", id);
   navigate("bankRecon");
 }
+/* ================= Stock Take / Inventory Adjustment =================
+   A stock take is a DRAFT sheet listing every inventory product with its system quantity. People count
+   the stock — as many rounds as it takes (Count 1, Count 2, …) — and the sheet keeps every round side by
+   side. Nothing touches the books until "Post Adjustment": only then is stock brought in line with the
+   agreed Final Qty, in ONE step:
+     - shortage: the missing quantity is taken out of the FIFO cost layers at its real cost, and posted
+       Dr Stock Adjustment / Cr Inventory;
+     - surplus: the extra quantity is added as a new cost layer (the product's latest cost unless you
+       type another), posted Dr Inventory / Cr Stock Adjustment.
+   A posted stock take is never edited or deleted — "Reverse" posts the exact opposite adjustment, so the
+   audit trail stays clean. */
+const STOCK_ADJ_CODE = "STOC0001";
+// The reason lists live in Admin settings (SETTINGS.stockAdjReasons); these read them live.
+function stkReasonList(dir){ // dir: "out" | "in" | undefined (= all)
+  return (SETTINGS.stockAdjReasons||[]).filter(r=>!dir || r.applies==="both" || r.applies===dir).map(r=>r.label);
+}
+let STK_CUR = null;      // the stock take sheet currently open (in memory, may have unsaved edits)
+let STK_DIRTY = false;
+let STK_FILTER = "all";
+let STK_SEARCH = "";
+
+function stkAdjAccountCode(){
+  const d = SETTINGS.defaultAccounts;
+  if(!d.stockAdjustment) d.stockAdjustment = STOCK_ADJ_CODE;
+  return d.stockAdjustment;
+}
+// Existing companies don't have the "Stock Adjustment" account yet — create it the first time it's needed.
+async function ensureStockAdjustmentAccount(){
+  const code = stkAdjAccountCode();
+  if(accByCode(code)) return;
+  const a = {id:uid("ACC"), code, name:"Stock Adjustment", category:"Cost of Sales", subCategory:"Cost of Sales", statement:"Profit or Loss",
+    side:"Debit", description:"Stock take gains and losses", createdBy:(CURRENT_USER&&CURRENT_USER.username)||"System", dateCreated:today(), opening:0, nonCash:false};
+  await Store.upsert("accounts", a);
+}
+function stkInventoryProducts(location){
+  return DB.products.filter(p=>p.type!=="Non Inventory" && (!location || [p.mainLocation,p.location2,p.location3].includes(location)))
+    .sort((a,b)=>(a.code||"").localeCompare(b.code||""));
+}
+function stkLineFor(p, rounds){
+  return {productId:p.id, code:p.code, name:p.name, location:[p.mainLocation,p.location2,p.location3].filter(Boolean).join(", "),
+    snapQty:num(p.onHandQty), counts:Array.from({length:rounds},()=>null), finalQty:null, reason:"", unitCost:null};
+}
+// The agreed quantity: a typed Final Qty wins, otherwise the most recent round that has a count.
+function stkFinalOf(l){
+  if(l.finalQty!==null && l.finalQty!==undefined && l.finalQty!=="") return num(l.finalQty);
+  for(let i=l.counts.length-1;i>=0;i--){ const c=l.counts[i]; if(c!==null && c!==undefined && c!=="") return num(c); }
+  return null;
+}
+function stkSysNow(l){ const p=byId(DB.products,l.productId); return p?num(p.onHandQty):num(l.snapQty); }
+function stkVariance(l){ const f=stkFinalOf(l); return f===null ? null : round2(f - stkSysNow(l)); }
+// Takes a surplus back out of stock. It removes the quantity from the cost layer(s) at the surplus's own
+// cost first (newest first), so the stock value falls by exactly what the surplus added; anything left
+// over (that surplus was already sold) comes off the oldest layers as usual. Returns the cost removed.
+function stkRemoveSurplus(p, qty, unitCost){
+  let remaining = num(qty), cost = 0;
+  const layers = p.fifoLayers||[];
+  for(let i=layers.length-1; i>=0 && remaining>0.0000001; i--){
+    if(Math.abs(num(layers[i].cost)-num(unitCost))>0.0000001) continue;
+    const take = Math.min(layers[i].qty, remaining);
+    layers[i].qty -= take; remaining -= take; cost += take*layers[i].cost;
+    if(layers[i].qty<=0.0000001) layers.splice(i,1);
+  }
+  if(remaining>0.0000001){ cost += productConsumeFIFO(p, remaining); }
+  else recalcProductStock(p);
+  return cost;
+}
+function stkEstUnitCost(l){
+  const p=byId(DB.products,l.productId); if(!p) return 0;
+  const v = stkVariance(l);
+  if(v!==null && v>0) return num(l.unitCost)||num(p.latestCost)||num(p.avgCost);
+  return num(p.avgCost)||num(p.latestCost);
+}
+function stkRoundsMismatch(l){
+  const vals = l.counts.filter(c=>c!==null&&c!==undefined&&c!=="").map(num);
+  return vals.length>1 && vals.some(v=>v!==vals[vals.length-1]);
+}
+function stkStatusChip(st){
+  return st==="Posted" ? `<span class="chip">Posted</span>` : st==="Reversed" ? `<span class="chip red">Reversed</span>` : `<span class="chip" style="background:#fff1d6;color:#9a6200">Draft</span>`;
+}
+
+/* ---------- List ---------- */
+VIEW_RENDERERS.stockTake = function(view){
+  STK_CUR = null; STK_DIRTY = false;
+  view.innerHTML = `
+    <div class="viewhead"><h2>Stock Take</h2>
+      <div class="actions">${listToolbarActionsHtml('stkTableWrap','stock-takes','Stock Takes')}${can('stockTake')?`<button class="btn" onclick="quickAdjForm()">+ Quick Adjustment</button><button class="btn primary" onclick="newStockTake()">+ New Stock Take</button>`:""}</div>
+    </div>
+    ${MISSING_TABLES.has("stocktakes")?`<div class="empty" style="color:var(--red)">⚠ This feature's database table hasn't been set up yet, so nothing saved here will be kept. Run <b>stocktakes_migration.sql</b> in the Supabase SQL editor first.</div>`:""}
+    <div class="panel" id="stkTableWrap"></div>`;
+  renderStockTakeList();
+};
+function renderStockTakeList(){
+  const wrap = document.getElementById("stkTableWrap"); if(!wrap) return;
+  const rows = DB.stocktakes.slice().sort((a,b)=>String(b.number).localeCompare(String(a.number)));
+  wrap.innerHTML = rows.length ? `<table>
+    <thead><tr><th>Number</th><th>Type</th><th>Date</th><th>Location</th><th class="num">Count Rounds</th><th class="num">Products</th><th class="num">Variances</th><th class="num">Net Value</th><th>Status</th><th></th></tr></thead><tbody>
+    ${rows.map(st=>{
+      const posted = (st.postings||[]).find(p=>p.kind==="Adjustment");
+      const nVar = posted ? posted.lines.length : (st.lines||[]).filter(l=>{const v=stkVariance(l); return v!==null && Math.abs(v)>=0.005;}).length;
+      const net = posted ? round2(posted.lines.reduce((s,l)=>s+(l.qtyDelta>0?l.amount:-l.amount),0)) : null;
+      const quick = st.kind==="quick";
+      return `<tr><td>${esc(st.number)}</td><td>${quick?"Quick Adjustment":"Stock Take"}</td><td>${fmtDate(st.date)}</td><td>${quick?'<span style="color:var(--muted)">—</span>':esc(st.location||"All locations")}</td><td class="num">${quick?'<span style="color:var(--muted)">—</span>':st.rounds}</td><td class="num">${(st.lines||[]).length}</td><td class="num">${nVar}</td><td class="num">${net===null?'<span style="color:var(--muted)">—</span>':money(net)}</td><td>${stkStatusChip(st.status)}</td>
+      <td>${quick?"":`<button class="btn small" onclick="openStockTake('${st.id}')">${st.status==="Draft"&&can('stockTake')?"Open":"View"}</button> <button class="btn small" onclick="stkPrintCountSheetDialog('${st.id}')">Count Sheet</button>`}${st.status!=="Draft"?` <button class="btn small" onclick="printStockAdjustment('${st.id}')">Print</button>`:""}${st.status==="Posted"&&can('stockTake')?` <button class="btn small danger" onclick="reverseStockTake('${st.id}')">Reverse</button>`:""}${st.status==="Draft"&&can('stockTake')?` <button class="btn small danger" onclick="deleteStockTake('${st.id}')">Delete</button>`:""}</td></tr>`; }).join("")}
+    </tbody></table>` : `<div class="empty">No stock takes yet. Start one with “+ New Stock Take”.</div>`;
+}
+function newStockTake(){
+  const locOpts = `<option value="">All locations</option>` + (SETTINGS.locations||[]).map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join("");
+  openModal("New Stock Take", `
+    <div class="grid g2">
+      <div class="field"><label>Stock Take Date</label><input id="stk_date" type="date" value="${today()}"></div>
+      <div class="field"><label>Location</label><select id="stk_loc">${locOpts}</select></div>
+    </div>
+    <div style="color:var(--muted);font-size:12px;margin-top:8px">Every inventory product (in that location) is listed with the quantity the system currently shows. Count as many rounds as needed; nothing is posted until you press “Post Adjustment”.</div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="createStockTake()">Create</button>`, true);
+}
+async function createStockTake(){
+  const date = document.getElementById("stk_date").value||today();
+  const location = document.getElementById("stk_loc").value;
+  const prods = stkInventoryProducts(location);
+  if(!prods.length){ toast("There are no inventory products to count"); return; }
+  const n = nextNumber('stockTake');
+  const st = {id:uid("STK"), number:"STK-"+String(n).padStart(4,"0"), date, location, status:"Draft", rounds:1,
+    lines:prods.map(p=>stkLineFor(p,1)), postings:[], createdBy:CURRENT_USER.username, dateCreated:today()};
+  await Store.upsert("stocktakes", st);
+  closeModal();
+  openStockTake(st.id);
+}
+async function deleteStockTake(id){
+  const st = byId(DB.stocktakes,id); if(!st || st.status!=="Draft") return;
+  if(!confirm(`Delete draft ${st.number}? Nothing has been posted, so no stock or accounts change.`)) return;
+  await Store.remove("stocktakes", id);
+  renderStockTakeList(); toast("Draft deleted");
+}
+
+/* ---------- The count sheet ---------- */
+function openStockTake(id){
+  const st = byId(DB.stocktakes,id); if(!st) return;
+  STK_CUR = JSON.parse(JSON.stringify(st)); STK_DIRTY = false; STK_FILTER = "all"; STK_SEARCH = "";
+  renderStockTakeSheet();
+}
+function stkEditable(){ return STK_CUR && STK_CUR.status==="Draft" && can('stockTake'); }
+function renderStockTakeSheet(){
+  const st = STK_CUR; const view = document.getElementById("view"); if(!st||!view) return;
+  const ed = stkEditable();
+  const head = Array.from({length:st.rounds},(_,r)=>`<th class="num" style="min-width:84px">Count ${r+1}</th>`).join("");
+  view.innerHTML = `
+    <div class="viewhead"><h2>${esc(st.number)} ${stkStatusChip(st.status)}</h2>
+      <div class="actions">
+        <button class="btn small" onclick="stkBack()">← Back to list</button>
+        <button class="btn small" onclick="stkExport('csv')">⬇ Export (CSV)</button>
+        <button class="btn small" onclick="stkExport('xlsx')">⬇ Export (.xlsx)</button>
+        <button class="btn small" onclick="stkPrintCountSheetDialog('${st.id}',true)">🖨 Count Sheet</button>
+        ${st.status!=="Draft"?`<button class="btn small" onclick="printStockAdjustment('${st.id}')">🖨 Adjustment</button>`:""}
+        ${ed?`<button class="btn small" onclick="stkAddMissing()">+ Add missing products</button><button class="btn" onclick="stkNewRound()">+ New Count Round</button><button class="btn" onclick="stkSave()">Save Draft</button><button class="btn primary" onclick="stkPost()">Post Adjustment</button>`:""}
+      </div>
+    </div>
+    <div class="toolbar">
+      <span>${fmtDate(st.date)} · ${esc(st.location||"All locations")} · ${st.rounds} count round${st.rounds===1?"":"s"}</span>
+      <input type="search" id="stkSearch" placeholder="Search products…" value="${esc(STK_SEARCH)}" oninput="STK_SEARCH=this.value;stkApplyFilter()">
+      <select id="stkFilter" onchange="STK_FILTER=this.value;stkApplyFilter()">
+        <option value="all">All products</option><option value="uncounted">Not counted yet</option><option value="variance">With a variance (recount list)</option><option value="mismatch">Counts disagree between rounds</option>
+      </select>
+      <span id="stkSummary" style="color:var(--muted);font-size:12.5px"></span>
+    </div>
+    <div class="panel" id="stkSheetWrap" style="overflow:auto;flex:1;min-height:0">
+      <table><thead><tr><th>Code</th><th>Product</th><th>Location</th><th class="num">System Qty</th>${head}<th class="num" style="min-width:90px">Final Qty</th><th class="num">Variance</th><th class="num">Est. Value</th><th style="min-width:130px">Reason</th><th class="num" style="min-width:90px">Surplus Cost</th></tr></thead>
+      <tbody>${st.lines.map((l,i)=>stkRowHtml(l,i,ed)).join("")}</tbody></table>
+    </div>`;
+  document.getElementById("stkFilter").value = STK_FILTER;
+  st.lines.forEach((l,i)=>stkRefreshRow(i));
+  stkApplyFilter();
+}
+function stkRowHtml(l,i,ed){
+  const st = STK_CUR;
+  const dis = ed ? "" : "disabled";
+  const counts = l.counts.map((c,r)=>`<td class="num"><input type="number" step="any" style="width:80px;text-align:right" ${dis} value="${c===null||c===undefined?"":c}" oninput="stkSetCount(${i},${r},this.value)"></td>`).join("");
+  const reasons = `<option value=""></option>` + (stkReasonList().includes(l.reason)||!l.reason ? stkReasonList() : [l.reason].concat(stkReasonList())).map(x=>`<option ${l.reason===x?"selected":""}>${esc(x)}</option>`).join("");
+  return `<tr id="stkRow${i}" data-s="${esc((l.code+" "+l.name+" "+l.location).toLowerCase())}">
+    <td>${esc(l.code)}</td><td>${esc(l.name)}</td><td>${esc(l.location)}</td>
+    <td class="num"><span id="stkSys${i}"></span></td>${counts}
+    <td class="num"><input type="number" step="any" style="width:84px;text-align:right" ${dis} id="stkFinal${i}" value="${l.finalQty===null||l.finalQty===undefined?"":l.finalQty}" oninput="stkSetFinal(${i},this.value)" placeholder="${st.lines[i]?"":""}"></td>
+    <td class="num"><span id="stkVar${i}"></span></td><td class="num"><span id="stkVal${i}"></span></td>
+    <td><select ${dis} style="width:130px" onchange="stkSetReason(${i},this.value)">${reasons}</select></td>
+    <td class="num"><input type="number" step="0.01" style="width:84px;text-align:right" ${dis} value="${l.unitCost===null||l.unitCost===undefined?"":l.unitCost}" oninput="stkSetCost(${i},this.value)"></td></tr>`;
+}
+// Recomputes just the computed cells of one row in place (so typing/tabbing is never interrupted).
+function stkRefreshRow(i){
+  const l = STK_CUR.lines[i]; const tr = document.getElementById("stkRow"+i); if(!l||!tr) return;
+  const sys = stkSysNow(l), fin = stkFinalOf(l), v = stkVariance(l);
+  const changed = Math.abs(sys-num(l.snapQty))>=0.005 && STK_CUR.status==="Draft";
+  document.getElementById("stkSys"+i).innerHTML = `${sys}${changed?` <span title="System quantity changed since this sheet was started (was ${l.snapQty}) — a sale, purchase or other movement happened while counting" style="color:#b42323;cursor:help">⚠</span>`:""}`;
+  const fi = document.getElementById("stkFinal"+i);
+  if(document.activeElement!==fi){ if(l.finalQty===null||l.finalQty===undefined||l.finalQty===""){ fi.value=""; } }
+  fi.placeholder = (fin!==null && (l.finalQty===null||l.finalQty===undefined||l.finalQty==="")) ? String(fin) : "";
+  const posted = STK_CUR.status!=="Draft";
+  let vTxt = "", valTxt = "";
+  if(v!==null && Math.abs(v)>=0.005){
+    vTxt = `<b style="color:${v<0?"#b42323":"#16703a"}">${v>0?"+":""}${v}</b>`;
+    const val = round2(Math.abs(v)*stkEstUnitCost(l));
+    valTxt = `<span style="color:${v<0?"#b42323":"#16703a"}">${v<0?"-":""}${money(val)}</span>`;
+  } else if(v!==null){ vTxt = `<span style="color:var(--muted)">0</span>`; }
+  document.getElementById("stkVar"+i).innerHTML = vTxt; document.getElementById("stkVal"+i).innerHTML = valTxt;
+  tr.dataset.unc = fin===null ? "1" : "0";
+  tr.dataset.var = (v!==null && Math.abs(v)>=0.005) ? "1" : "0";
+  tr.dataset.mis = stkRoundsMismatch(l) ? "1" : "0";
+  tr.style.background = tr.dataset.mis==="1" ? "rgba(255,170,0,.12)" : "";
+  stkUpdateSummary();
+}
+function stkUpdateSummary(){
+  const el = document.getElementById("stkSummary"); if(!el||!STK_CUR) return;
+  let counted=0, vars=0, net=0;
+  STK_CUR.lines.forEach(l=>{ const f=stkFinalOf(l); if(f!==null) counted++; const v=stkVariance(l); if(v!==null && Math.abs(v)>=0.005){ vars++; net += (v>0?1:-1)*Math.abs(v)*stkEstUnitCost(l); } });
+  el.textContent = `${counted} of ${STK_CUR.lines.length} counted · ${vars} variance${vars===1?"":"s"} · est. net ${money(round2(net))}`;
+}
+function stkApplyFilter(){
+  if(!STK_CUR) return;
+  const q = (STK_SEARCH||"").toLowerCase().trim();
+  STK_CUR.lines.forEach((l,i)=>{
+    const tr = document.getElementById("stkRow"+i); if(!tr) return;
+    let show = !q || tr.dataset.s.includes(q);
+    if(show && STK_FILTER==="uncounted") show = tr.dataset.unc==="1";
+    if(show && STK_FILTER==="variance") show = tr.dataset.var==="1";
+    if(show && STK_FILTER==="mismatch") show = tr.dataset.mis==="1";
+    tr.style.display = show ? "" : "none";
+  });
+}
+function stkSetCount(i,r,val){ STK_CUR.lines[i].counts[r] = val===""?null:num(val); STK_DIRTY=true; stkRefreshRow(i); stkApplyFilterRow(i); }
+function stkSetFinal(i,val){ STK_CUR.lines[i].finalQty = val===""?null:num(val); STK_DIRTY=true; stkRefreshRow(i); stkApplyFilterRow(i); }
+function stkSetReason(i,val){ STK_CUR.lines[i].reason = val; STK_DIRTY=true; }
+function stkSetCost(i,val){ STK_CUR.lines[i].unitCost = val===""?null:num(val); STK_DIRTY=true; stkRefreshRow(i); }
+// Filtering only re-evaluated on demand while typing, so a row doesn't vanish under your cursor mid-entry.
+function stkApplyFilterRow(i){ /* intentionally a no-op: rows stay visible until the filter is re-applied */ }
+function stkNewRound(){
+  STK_CUR.rounds++; STK_CUR.lines.forEach(l=>l.counts.push(null)); STK_DIRTY=true;
+  STK_FILTER = "variance"; STK_SEARCH = "";
+  renderStockTakeSheet();
+  toast(`Count ${STK_CUR.rounds} added — showing only products with a variance, the usual recount list. Change the filter to see everything.`);
+}
+function stkAddMissing(){
+  const have = new Set(STK_CUR.lines.map(l=>l.productId));
+  const add = stkInventoryProducts(STK_CUR.location).filter(p=>!have.has(p.id));
+  if(!add.length){ toast("Every inventory product is already on this sheet"); return; }
+  add.forEach(p=>STK_CUR.lines.push(stkLineFor(p,STK_CUR.rounds)));
+  STK_DIRTY=true; renderStockTakeSheet(); toast(`${add.length} product${add.length===1?"":"s"} added`);
+}
+async function stkSave(quiet){
+  if(!STK_CUR) return false;
+  await Store.upsert("stocktakes", JSON.parse(JSON.stringify(STK_CUR)));
+  STK_DIRTY=false; if(!quiet) toast("Draft saved");
+  return true;
+}
+function stkBack(){
+  if(STK_DIRTY && !confirm("You have unsaved changes on this sheet. Leave without saving?")) return;
+  navigate("stockTake");
+}
+
+/* ---------- Posting ---------- */
+async function stkPost(){
+  const st = STK_CUR; if(!st || st.status!=="Draft") return;
+  if(!checkNotClosed(st.date)) return;
+  const items = st.lines.map(l=>({l, v:stkVariance(l)})).filter(x=>x.v!==null && Math.abs(x.v)>=0.005);
+  const uncounted = st.lines.filter(l=>stkFinalOf(l)===null).length;
+  if(!items.length){ toast("Nothing to adjust — every counted product already matches the system quantity"); return; }
+  const changed = st.lines.filter(l=>stkFinalOf(l)!==null && Math.abs(stkSysNow(l)-num(l.snapQty))>=0.005);
+  const short = items.filter(x=>x.v<0), over = items.filter(x=>x.v>0);
+  const est = x=>round2(Math.abs(x.v)*stkEstUnitCost(x.l));
+  const msg = `Post ${st.number}?\n\n` +
+    `• ${short.length} shortage${short.length===1?"":"s"} (est. ${money(round2(short.reduce((s,x)=>s+est(x),0)))})\n` +
+    `• ${over.length} surplus${over.length===1?"":"es"} (est. ${money(round2(over.reduce((s,x)=>s+est(x),0)))})\n` +
+    (uncounted?`• ${uncounted} product${uncounted===1?"":"s"} not counted — left unchanged\n`:"") +
+    (changed.length?`\n⚠ ${changed.length} product${changed.length===1?"'s":"s'"} system quantity changed since this sheet was started (sales/purchases while counting). Adjustments are worked out against the quantity the system shows NOW.\n`:"") +
+    `\nThis changes stock and the accounts. A posted stock take can't be edited — only reversed.`;
+  if(!confirm(msg)) return;
+  const n = await stkExecutePost(st, items);
+  STK_DIRTY=false;
+  toast(`${st.number} posted — ${n} product${n===1?"":"s"} adjusted`);
+  renderStockTakeSheet();
+}
+// The actual posting, shared by a stock take and a Quick Adjustment. Brings each listed product to its
+// final quantity through the FIFO layers and posts the ledger entries in one transaction.
+async function stkExecutePost(st, items){
+  await ensureStockAdjustmentAccount();
+  const d = SETTINGS.defaultAccounts, adjAcct = stkAdjAccountCode();
+  const transId = allocateTransactionId();
+  const entries = [], postLines = [];
+  items.forEach(({l})=>{
+    const p = byId(DB.products,l.productId); if(!p) return;
+    const sys = num(p.onHandQty), fin = stkFinalOf(l), diff = round2(fin - sys);
+    if(Math.abs(diff)<0.005) return;
+    const invAcct = p.inventoryAccount || d.inventory;
+    let amount, unit;
+    if(diff<0){ const qty = -diff; const cost = productConsumeFIFO(p, qty); amount = round2(cost); unit = qty ? cost/qty : 0; }
+    else { unit = num(l.unitCost)||num(p.latestCost)||num(p.avgCost); productAddLayer(p, diff, unit); amount = round2(diff*unit); }
+    Store.upsert("products", p);
+    const narr = `Stock take ${st.number}: ${p.code} ${p.name} (${diff>0?"+":""}${diff})${l.reason?" — "+l.reason:""}`;
+    if(amount>0){
+      if(diff<0){
+        entries.push({date:st.date, type:"Stock Adjustment", sourceType:"stocktakes", sourceId:st.id, accountCode:adjAcct, debit:amount, credit:0, reference:st.number, narration:narr});
+        entries.push({date:st.date, type:"Stock Adjustment", sourceType:"stocktakes", sourceId:st.id, accountCode:invAcct, debit:0, credit:amount, reference:st.number, narration:narr});
+      } else {
+        entries.push({date:st.date, type:"Stock Adjustment", sourceType:"stocktakes", sourceId:st.id, accountCode:invAcct, debit:amount, credit:0, reference:st.number, narration:narr});
+        entries.push({date:st.date, type:"Stock Adjustment", sourceType:"stocktakes", sourceId:st.id, accountCode:adjAcct, debit:0, credit:amount, reference:st.number, narration:narr});
+      }
+    }
+    postLines.push({productId:p.id, code:p.code, name:p.name, sysQty:sys, finalQty:fin, qtyDelta:diff, unitCost:round2(unit), amount, reason:l.reason||"", invAcct});
+  });
+  if(entries.length) await postEntries(entries, transId); else await persistLedgerChange();
+  st.status = "Posted"; st.postedBy = CURRENT_USER.username; st.postedOn = today();
+  st.postings = (st.postings||[]).concat([{kind:"Adjustment", transId, date:st.date, lines:postLines}]);
+  await Store.upsert("stocktakes", JSON.parse(JSON.stringify(st)));
+  return postLines.length;
+}
+async function reverseStockTake(id){
+  const st = byId(DB.stocktakes,id); if(!st || st.status!=="Posted") return;
+  const post = (st.postings||[]).find(p=>p.kind==="Adjustment"); if(!post) return;
+  const date = today();
+  if(!checkNotClosed(date)) return;
+  if(!confirm(`Reverse ${st.number}?\n\nThis posts the exact opposite adjustment today (${fmtDate(date)}): shortages are put back into stock at their original cost, surpluses are taken back out. The original posting stays on record.`)) return;
+  await ensureStockAdjustmentAccount();
+  const adjAcct = stkAdjAccountCode();
+  const transId = allocateTransactionId();
+  const entries = [], lines = [];
+  post.lines.forEach(l=>{
+    const p = byId(DB.products,l.productId); if(!p) return;
+    const narr = `Reversal of stock take ${st.number}: ${l.code} ${l.name}`;
+    let amount;
+    if(l.qtyDelta<0){ const qty = -l.qtyDelta; productAddLayer(p, qty, l.unitCost); amount = round2(qty*l.unitCost);
+      if(amount>0){ entries.push({date, type:"Stock Adjustment (Reversal)", sourceType:"stocktakes", sourceId:st.id, accountCode:l.invAcct, debit:amount, credit:0, reference:st.number+"-R", narration:narr});
+                    entries.push({date, type:"Stock Adjustment (Reversal)", sourceType:"stocktakes", sourceId:st.id, accountCode:adjAcct, debit:0, credit:amount, reference:st.number+"-R", narration:narr}); }
+    } else { const cost = stkRemoveSurplus(p, l.qtyDelta, l.unitCost); amount = round2(cost);
+      if(amount>0){ entries.push({date, type:"Stock Adjustment (Reversal)", sourceType:"stocktakes", sourceId:st.id, accountCode:adjAcct, debit:amount, credit:0, reference:st.number+"-R", narration:narr});
+                    entries.push({date, type:"Stock Adjustment (Reversal)", sourceType:"stocktakes", sourceId:st.id, accountCode:l.invAcct, debit:0, credit:amount, reference:st.number+"-R", narration:narr}); }
+    }
+    Store.upsert("products", p);
+    lines.push({productId:l.productId, code:l.code, name:l.name, qtyDelta:-l.qtyDelta, unitCost:l.unitCost, amount});
+  });
+  if(entries.length) await postEntries(entries, transId); else await persistLedgerChange();
+  st.status = "Reversed";
+  st.postings = st.postings.concat([{kind:"Reversal", transId, date, lines}]);
+  await Store.upsert("stocktakes", st);
+  toast(`${st.number} reversed`);
+  if(CURRENT_VIEW==="stockTake") { if(STK_CUR && STK_CUR.id===id){ STK_CUR = JSON.parse(JSON.stringify(st)); renderStockTakeSheet(); } else renderStockTakeList(); }
+}
+
+
+/* ---------- Quick Adjustment (damaged / expired / lost / found stock, no count sheet needed) ---------- */
+let QA_LINES = [];
+function quickAdjForm(){
+  QA_LINES = [{productId:"", qty:"", unitCost:""}];
+  openModal("Quick Adjustment", `
+    <div class="grid g2">
+      <div class="field"><label>Date</label><input id="qa_date" type="date" value="${today()}"></div>
+      <div class="field"><label>Adjustment</label><select id="qa_type" onchange="qaTypeChanged()"><option value="out">Write off — reduce stock</option><option value="in">Increase stock</option></select></div>
+      <div class="field"><label>Reason</label><select id="qa_reason"></select></div>
+      <div class="field"><label>Note (optional)</label><input id="qa_note" placeholder="e.g. water damage in the store room"></div>
+    </div>
+    <div id="qa_lines" style="margin-top:8px"></div>
+    <button class="btn small" onclick="qaAddLine()">+ Add line</button>
+    <div id="qa_total" style="margin-top:10px;font-weight:600"></div>
+    <div style="color:var(--muted);font-size:12px;margin-top:6px">Posts straight away: the quantity is taken out of stock at its real FIFO cost (Dr Stock Adjustment / Cr Inventory), or added at the latest cost (Dr Inventory / Cr Stock Adjustment). It can be reversed later but not edited.</div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="qaPost()">Post Adjustment</button>`, true);
+  qaTypeChanged();
+}
+function qaTypeChanged(){
+  const t = document.getElementById("qa_type").value;
+  document.getElementById("qa_reason").innerHTML = stkReasonList(t==="out"?"out":"in").map(r=>`<option>${esc(r)}</option>`).join("");
+  qaRenderLines();
+}
+function qaAddLine(){ QA_LINES.push({productId:"", qty:"", unitCost:""}); qaRenderLines(); }
+function qaRemoveLine(i){ QA_LINES.splice(i,1); if(!QA_LINES.length) QA_LINES.push({productId:"",qty:"",unitCost:""}); qaRenderLines(); }
+function qaRenderLines(){
+  const isOut = document.getElementById("qa_type").value==="out";
+  const prods = stkInventoryProducts("");
+  const opts = sel => `<option value="">— select product —</option>` + prods.map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.code)} — ${esc(p.name)} (On hand: ${num(p.onHandQty)})</option>`).join("");
+  document.getElementById("qa_lines").innerHTML = `<table><thead><tr><th>Product</th><th class="num" style="width:110px">Quantity</th>${isOut?"":`<th class="num" style="width:120px">Unit Cost</th>`}<th class="num" style="width:120px">Est. Value</th><th style="width:40px"></th></tr></thead><tbody>
+    ${QA_LINES.map((l,i)=>`<tr><td><select style="width:100%" onchange="qaSet(${i},'productId',this.value)">${opts(l.productId)}</select></td>
+      <td class="num"><input type="number" step="any" min="0" style="width:100px;text-align:right" value="${l.qty}" oninput="qaSet(${i},'qty',this.value)"></td>
+      ${isOut?"":`<td class="num"><input type="number" step="0.01" style="width:110px;text-align:right" value="${l.unitCost}" placeholder="latest cost" oninput="qaSet(${i},'unitCost',this.value)"></td>`}
+      <td class="num" id="qa_val${i}"></td><td><button class="btn small danger" onclick="qaRemoveLine(${i})">✕</button></td></tr>`).join("")}
+    </tbody></table>`;
+  QA_LINES.forEach((_,i)=>qaRefreshLine(i));
+  qaRefreshTotal();
+}
+function qaSet(i,k,v){ QA_LINES[i][k]=v; if(k==="productId"){ qaRenderLines(); return; } qaRefreshLine(i); qaRefreshTotal(); }
+function qaLineValue(l){
+  const p = byId(DB.products,l.productId); const q = num(l.qty); if(!p||q<=0) return 0;
+  const isOut = document.getElementById("qa_type").value==="out";
+  return round2(q * (isOut ? (num(p.avgCost)||num(p.latestCost)) : (num(l.unitCost)||num(p.latestCost)||num(p.avgCost))));
+}
+function qaRefreshLine(i){ const el=document.getElementById("qa_val"+i); if(el){ const v=qaLineValue(QA_LINES[i]); el.textContent = v?money(v):""; } }
+function qaRefreshTotal(){ const el=document.getElementById("qa_total"); if(el) el.textContent = "Estimated value: "+money(round2(QA_LINES.reduce((s,l)=>s+qaLineValue(l),0))); }
+async function qaPost(){
+  const date = document.getElementById("qa_date").value||today();
+  const isOut = document.getElementById("qa_type").value==="out";
+  const reason = document.getElementById("qa_reason").value, note = document.getElementById("qa_note").value.trim();
+  const lines = QA_LINES.filter(l=>l.productId || num(l.qty)>0);
+  if(!lines.length){ toast("Add at least one product"); return; }
+  const seen = new Set();
+  for(const l of lines){
+    const p = byId(DB.products,l.productId);
+    if(!p){ toast("Please select a product on every line"); return; }
+    if(num(l.qty)<=0){ toast(`Enter a quantity for ${p.code}`); return; }
+    if(seen.has(p.id)){ toast(`${p.code} appears twice — combine it into one line`); return; }
+    seen.add(p.id);
+    if(isOut && num(l.qty)>num(p.onHandQty)+0.000001){ toast(`Only ${num(p.onHandQty)} of ${p.code} on hand — you can't write off ${num(l.qty)}`); return; }
+  }
+  if(!checkNotClosed(date)) return;
+  const total = round2(lines.reduce((s,l)=>s+qaLineValue(l),0));
+  if(!confirm(`${isOut?"Write off":"Add"} ${lines.length} product${lines.length===1?"":"s"} — ${reason}\nEstimated value ${money(total)}.\n\nThis changes stock and the accounts immediately. It can be reversed later but not edited.`)) return;
+  const n = nextNumber('quickAdjust');
+  const st = {id:uid("STK"), kind:"quick", number:"ADJ-"+String(n).padStart(4,"0"), date, location:"", note, status:"Draft", rounds:0, postings:[],
+    lines:lines.map(l=>{ const p=byId(DB.products,l.productId); const base=stkLineFor(p,0);
+      base.finalQty = round2(num(p.onHandQty) + (isOut?-1:1)*num(l.qty)); base.reason = reason; base.unitCost = (!isOut && l.unitCost!=="") ? num(l.unitCost) : null; return base; }),
+    createdBy:CURRENT_USER.username, dateCreated:today()};
+  const items = st.lines.map(l=>({l, v:stkVariance(l)}));
+  const done = await stkExecutePost(st, items);
+  closeModal();
+  toast(`${st.number} posted — ${done} product${done===1?"":"s"} adjusted`);
+  if(CURRENT_VIEW==="stockTake") renderStockTakeList();
+}
+
+/* ---------- Export ---------- */
+function stkExportRows(){
+  const st = STK_CUR;
+  const head = ["Code","Product","Location","System Qty"].concat(Array.from({length:st.rounds},(_,r)=>"Count "+(r+1)), ["Final Qty","Variance","Est. Value","Reason","Surplus Cost"]);
+  const rows = st.lines.map(l=>{ const v=stkVariance(l), f=stkFinalOf(l);
+    return [l.code,l.name,l.location,stkSysNow(l)].concat(l.counts.map(c=>c===null||c===undefined?"":c), [f===null?"":f, v===null?"":v, (v!==null&&Math.abs(v)>=0.005)?round2((v<0?-1:1)*Math.abs(v)*stkEstUnitCost(l)):"", l.reason||"", l.unitCost===null||l.unitCost===undefined?"":l.unitCost]); });
+  return [head].concat(rows);
+}
+function stkExport(kind){
+  if(!STK_CUR) return;
+  const aoa = stkExportRows(), name = STK_CUR.number.toLowerCase();
+  if(kind==="xlsx"){
+    if(typeof XLSX==="undefined"){ toast("Excel export library failed to load — check your internet connection", true); return; }
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Stock Take"); XLSX.writeFile(wb, name+".xlsx"); return;
+  }
+  const csv = aoa.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  const a = document.createElement("a"); a.href=url; a.download=name+".csv"; a.click(); URL.revokeObjectURL(url);
+}
+
+/* ---------- Printing ---------- */
+function stkPrintCountSheetDialog(id, fromSheet){
+  const st = fromSheet && STK_CUR ? STK_CUR : byId(DB.stocktakes,id); if(!st) return;
+  openModal("Print Count Sheet", `
+    <div class="field"><label><input type="checkbox" id="stkp_sys"> Show system quantities</label>
+      <div style="color:var(--muted);font-size:12px">Leave unticked for a blind count — counters write down what they see, not what the system expects.</div></div>
+    <div class="field"><label>Which products</label><select id="stkp_which"><option value="all">All products</option><option value="variance">Only products with a variance (recount list)</option></select></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="printStockCountSheet('${st.id}',${fromSheet?"true":"false"})">Print</button>`, true);
+}
+function printStockCountSheet(id, fromSheet){
+  const st = fromSheet && STK_CUR ? STK_CUR : byId(DB.stocktakes,id); if(!st) return;
+  const showSys = document.getElementById("stkp_sys").checked, which = document.getElementById("stkp_which").value;
+  closeModal();
+  let lines = st.lines;
+  if(which==="variance") lines = lines.filter(l=>{ const v=stkVariance(l); return v!==null && Math.abs(v)>=0.005; });
+  if(!lines.length){ toast("No products to print"); return; }
+  const design = currentDesign();
+  const win = window.open("","_blank");
+  win.document.write(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>STOCK COUNT SHEET ${esc(st.number)}</title>${docPrintStyles()}
+    <style>.cnt{border-bottom:1px solid #999;min-width:70px;height:26px}.items td{vertical-align:middle}</style></head><body>
+    ${printPreviewChrome("STOCK_COUNT_SHEET_"+st.number+".pdf")}
+    <div class="sheet d-${design}">
+      ${docCompanyHeader("STOCK COUNT SHEET", `No. <b>${esc(st.number)}</b>`, "")}
+      <div class="meta"><div class="card"><div class="lbl">Stock Take</div><div class="big">${esc(st.location||"All locations")}</div><div class="sm">${which==="variance"?"Recount list — products with a variance":"All inventory products"}</div></div>
+        <div class="card"><div class="lbl">Details</div><div class="kv"><span>Date</span><b>${fmtDate(st.date)}</b></div><div class="kv"><span>Products</span><b>${lines.length}</b></div></div></div>
+      <table class="items"><thead><tr><th style="width:34px">#</th><th style="width:90px">Code</th><th>Product</th><th>Location</th>${showSys?`<th class="num">System Qty</th>`:""}<th class="num" style="width:90px">Count</th><th class="num" style="width:90px">Recount</th><th style="width:110px">Remarks</th></tr></thead><tbody>
+        ${lines.map((l,i)=>`<tr><td style="color:var(--muted)">${i+1}</td><td class="code">${esc(l.code)}</td><td>${esc(l.name)}</td><td>${esc(l.location)}</td>${showSys?`<td class="num">${stkSysNow(l)}</td>`:""}<td class="cnt"></td><td class="cnt"></td><td class="cnt"></td></tr>`).join("")}
+      </tbody></table>
+      ${docSignatories("Counted By","Checked By / Manager")}
+    </div></body></html>`);
+  win.document.close();
+}
+function printStockAdjustment(id){
+  const st = byId(DB.stocktakes,id); if(!st) return;
+  const post = (st.postings||[]).find(p=>p.kind==="Adjustment");
+  const rev = (st.postings||[]).find(p=>p.kind==="Reversal");
+  if(!post){ toast("This stock take hasn't been posted yet"); return; }
+  const design = currentDesign();
+  const loss = round2(post.lines.filter(l=>l.qtyDelta<0).reduce((s,l)=>s+l.amount,0));
+  const gain = round2(post.lines.filter(l=>l.qtyDelta>0).reduce((s,l)=>s+l.amount,0));
+  const win = window.open("","_blank");
+  win.document.write(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>STOCK ADJUSTMENT ${esc(st.number)}</title>${docPrintStyles()}</head><body>
+    ${printPreviewChrome("STOCK_ADJUSTMENT_"+st.number+".pdf")}
+    <div class="sheet d-${design}">
+      ${docCompanyHeader("STOCK ADJUSTMENT", `No. <b>${esc(st.number)}</b>`, st.status==="Reversed"?`<span class="badge unpaid">Reversed ${fmtDate(rev&&rev.date)}</span>`:`<span class="badge paid">Posted</span>`)}
+      <div class="meta"><div class="card"><div class="lbl">${st.kind==="quick"?"Quick Adjustment":"Stock Take"}</div><div class="big">${st.kind==="quick"?esc((post.lines[0]&&post.lines[0].reason)||"Stock adjustment"):esc(st.location||"All locations")}</div><div class="sm">${st.kind==="quick"?esc(st.note||""):st.rounds+" count round"+(st.rounds===1?"":"s")}${st.postedBy?" · posted by "+esc(st.postedBy):""}</div></div>
+        <div class="card"><div class="lbl">Details</div><div class="kv"><span>Date</span><b>${fmtDate(post.date)}</b></div><div class="kv"><span>Trans ID</span><b>${esc(post.transId)}</b></div></div></div>
+      <table class="items"><thead><tr><th style="width:34px">#</th><th style="width:90px">Code</th><th>Product</th><th class="num">System</th><th class="num">${st.kind==="quick"?"New Qty":"Counted"}</th><th class="num">Variance</th><th class="num">Unit Cost</th><th class="num">Value</th><th>Reason</th></tr></thead><tbody>
+        ${post.lines.map((l,i)=>`<tr><td style="color:var(--muted)">${i+1}</td><td class="code">${esc(l.code)}</td><td>${esc(l.name)}</td><td class="num">${l.sysQty}</td><td class="num">${l.finalQty}</td><td class="num">${l.qtyDelta>0?"+":""}${l.qtyDelta}</td><td class="num">${money(l.unitCost)}</td><td class="num">${l.qtyDelta<0?"-":""}${money(l.amount)}</td><td>${esc(l.reason||"")}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="bottom"><div class="words"><b>Net effect on profit</b><i>${esc(spellNumber(Math.abs(round2(gain-loss))))} ${gain-loss<0?"(loss)":"(gain)"}</i></div>
+        <div class="totals"><div class="row"><span>Stock shortages</span><span>-${money(loss)}</span></div><div class="row"><span>Stock surpluses</span><span>${money(gain)}</span></div>
+        <div class="grand"><span>Net</span><span>${gain-loss<0?"-":""}${money(Math.abs(round2(gain-loss)))}</span></div></div></div>
+      ${docSignatories("Stock Taker","Approved By / Manager")}
+    </div></body></html>`);
+  win.document.close();
+}
+
 /* ================= Fixed Asset Register =================
    Tracks cost, accumulated depreciation, and net book value per asset, and posts straight-line
    depreciation as a normal journal entry (Dr Depreciation Expense / Cr Accumulated Depreciation) so
@@ -4898,6 +5425,15 @@ function renderProductMovementReport(wrap, entityId){
   // drop the pre-From rows after the running total has been carried through them.
   collect(DB.sales.filter(s=>!to||s.date<=to), "Sale", "customerName", false);
   collect(DB.purchases.filter(s=>!to||s.date<=to), "Purchase", "supplierName", true);
+  // Posted stock-take adjustments (and their reversals) move stock too.
+  (DB.stocktakes||[]).forEach(st=>(st.postings||[]).forEach(po=>{
+    if(to && po.date>to) return;
+    po.lines.forEach((l,seq)=>{
+      if(entityId && l.productId!==entityId) return;
+      rows.push({ transId:po.transId, lineSeq:seq, date:po.date, type:po.kind==="Reversal"?"Stock Take Reversal":"Stock Adjustment", doc:st.number, partyName:"",
+        productId:l.productId, productCode:l.code, productName:l.name, cost:l.unitCost, in:l.qtyDelta>0?l.qtyDelta:0, out:l.qtyDelta<0?-l.qtyDelta:0, _beforeFrom:(from && po.date<from) });
+    });
+  }));
   const all = sortByTransId(rows, true);
   // Carry a per-product running total through the full history, starting from each product's opening qty.
   const running = {};
@@ -5481,7 +6017,7 @@ function printWHTCertificate(kind, id){
 /* ================= Admin / Settings ================= */
 const MODULE_LABELS = {admin:"Admin",customers:"Customer Information",suppliers:"Supplier Information",accounts:"Account Information",products:"Product Information",
   salesOrder:"Sales Order",salesInvoice:"Sales Invoice",salesReceipt:"Sales Receipt",purchaseOrder:"Purchase Order",purchaseInvoice:"Purchase Invoice",makePayment:"Make Payment",enterExpenses:"Enter Expenses",
-  billPayment:"Bill Payment",journalEntry:"Journal Entry",viewLedgers:"View Ledgers",bankRecon:"Bank Reconciliation",fixedAssets:"Fixed Assets",reports:"Reports"};
+  billPayment:"Bill Payment",journalEntry:"Journal Entry",viewLedgers:"View Ledgers",bankRecon:"Bank Reconciliation",fixedAssets:"Fixed Assets",stockTake:"Stock Take",reports:"Reports"};
 let ADMIN_TAB = "company";
 VIEW_RENDERERS.admin = function(view){
   if(!can('admin')){ view.innerHTML = `<div class="empty">You don't have access to Admin settings.</div>`; return; }
@@ -5883,7 +6419,7 @@ async function resetApplication(){
 
   DB.ledger = []; DB.sales = []; DB.purchases = []; DB.receipts = []; DB.payments = [];
   DB.expenses = []; DB.exppayments = []; DB.journal = []; DB.muljournal = [];
-  DB.salesorders = []; DB.purchaseorders = [];
+  DB.salesorders = []; DB.purchaseorders = []; DB.stocktakes = [];
   DB.accounts.forEach(a=>{ a.opening = 0; a.balance = 0; });
   DB.customers.forEach(c=>{ c.opening = 0; c.balance = 0; });
   DB.suppliers.forEach(s=>{ s.opening = 0; s.balance = 0; });
@@ -5891,7 +6427,7 @@ async function resetApplication(){
   Object.keys(SETTINGS.nextNumbers).forEach(k=>{ SETTINGS.nextNumbers[k] = 1; });
   SETTINGS.nextTransactionId = 1;
 
-  await Promise.all(["ledger","sales","purchases","salesorders","purchaseorders","receipts","payments","expenses","exppayments","journal","muljournal","accounts","customers","suppliers","products"].map(t=>Store.saveAll(t)));
+  await Promise.all(["ledger","sales","purchases","salesorders","purchaseorders","receipts","payments","expenses","exppayments","journal","muljournal","stocktakes","accounts","customers","suppliers","products"].map(t=>Store.saveAll(t)));
   await Store.saveSettings();
   recalcAllAccountBalances();
   toast("Application reset — everything is at zero");
@@ -6002,6 +6538,14 @@ function renderAdminAccountsDefaultsTab(body){
     </div>
 
     <div class="panel pad settings-section">
+      <h3>Stock Adjustment Reasons</h3>
+      <p style="color:var(--muted);font-size:13px;margin-top:0">The reasons offered on Stock Take lines and Quick Adjustments. “Write-off” reasons appear when reducing stock, “Increase” reasons when adding stock, and “Both” in either. Removing a reason doesn't change adjustments already posted.</p>
+      <div id="stkreasons_rows"></div>
+      <button class="btn small" onclick="addStockReason()">+ Add reason</button>
+      <button class="btn primary" onclick="saveStockReasons()" style="margin-left:8px">Save</button>
+    </div>
+
+    <div class="panel pad settings-section">
       <h3>Due Date Terms</h3>
       <div id="duedates_rows"></div>
       <button class="btn small" onclick="addDueDateTerm()">+ Add due date term</button>
@@ -6023,6 +6567,7 @@ function renderAdminAccountsDefaultsTab(body){
   renderWhtPresetRows('creditors');
   renderPaymentMethodRows();
   renderDueDateTermRows();
+  renderStockReasonRows();
   renderTypeOptionRows('customerTypes','types_customer');
   renderTypeOptionRows('supplierTypes','types_supplier');
   renderTypeOptionRows('productTypes','types_product');
@@ -6039,6 +6584,34 @@ async function savePaymentMethods(){
   SETTINGS.paymentMethods.forEach((m,i)=>{ m.label = document.getElementById(`pm_label_${i}`).value.trim()||m.label; m.account = document.getElementById(`pm_acct_${i}`).value; });
   await Store.saveSettings();
   toast("Payment methods saved");
+}
+function renderStockReasonRows(){
+  if(!SETTINGS.stockAdjReasons) SETTINGS.stockAdjReasons = JSON.parse(JSON.stringify(SEED_SETTINGS.stockAdjReasons));
+  document.getElementById("stkreasons_rows").innerHTML = `<table><tr><th>Reason</th><th style="width:190px">Used for</th><th></th></tr>` +
+    SETTINGS.stockAdjReasons.map((r,i)=>`<tr><td><input id="sr_label_${i}" value="${esc(r.label)}" style="width:100%"></td><td><select id="sr_applies_${i}"><option value="out" ${r.applies==="out"?"selected":""}>Write-off (reduce stock)</option><option value="in" ${r.applies==="in"?"selected":""}>Increase stock</option><option value="both" ${r.applies==="both"?"selected":""}>Both</option></select></td><td><button class="btn small" onclick="removeStockReason(${i})">✕</button></td></tr>`).join("") + `</table>`;
+}
+// Keeps whatever is typed in the rows (not yet saved) before the list is re-drawn.
+function readStockReasonRows(){
+  SETTINGS.stockAdjReasons.forEach((r,i)=>{ const l=document.getElementById("sr_label_"+i), a=document.getElementById("sr_applies_"+i); if(l) r.label=l.value; if(a) r.applies=a.value; });
+}
+function addStockReason(){ readStockReasonRows(); SETTINGS.stockAdjReasons.push({label:"", applies:"both"}); renderStockReasonRows(); }
+function removeStockReason(i){
+  readStockReasonRows();
+  SETTINGS.stockAdjReasons.splice(i,1);
+  renderStockReasonRows();
+  toast("Removed — press Save to keep this change");
+}
+async function saveStockReasons(){
+  readStockReasonRows();
+  const list = SETTINGS.stockAdjReasons.map(r=>({label:String(r.label||"").trim(), applies:r.applies})).filter(r=>r.label);
+  const seen = new Set();
+  for(const r of list){ const k=r.label.toLowerCase(); if(seen.has(k)){ toast(`"${r.label}" appears twice — each reason must be different`); return; } seen.add(k); }
+  if(!list.some(r=>r.applies==="out"||r.applies==="both")){ toast("Keep at least one reason that can be used for write-offs"); return; }
+  if(!list.some(r=>r.applies==="in"||r.applies==="both")){ toast("Keep at least one reason that can be used for increases"); return; }
+  SETTINGS.stockAdjReasons = list;
+  await Store.saveSettings();
+  renderStockReasonRows();
+  toast("Stock adjustment reasons saved");
 }
 function renderDueDateTermRows(){
   document.getElementById("duedates_rows").innerHTML = `<table><tr><th>Label</th><th>Days</th><th></th></tr>` +
