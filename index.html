@@ -488,8 +488,20 @@ const Store = {
     // row-level security policy (see multitenant_schema.sql) — company_id is still filtered explicitly
     // here too so a read never depends solely on that policy being correctly in place.
     async function loadTable(t){
-      let res = await sb.from("acct_"+t).select("*").eq("company_id", CURRENT_COMPANY_ID);
-      if(res.error) res = await sb.from("acct_"+t).select("*").eq("company_id", CURRENT_COMPANY_ID); // one retry before giving up
+      // Supabase returns at most 1000 rows per request, so a large table (the ledger especially) is read in
+      // pages of 1000 until a short page comes back — otherwise rows past the first 1000 silently go missing.
+      async function readAll(){
+        let all = [], from = 0;
+        for(;;){
+          const r = await sb.from("acct_"+t).select("*").eq("company_id", CURRENT_COMPANY_ID).order("id").range(from, from+999);
+          if(r.error) return r;
+          all = all.concat(r.data||[]);
+          if(!r.data || r.data.length<1000) return { data: all, error: null };
+          from += 1000;
+        }
+      }
+      let res = await readAll();
+      if(res.error) res = await readAll(); // one retry before giving up
       if(res.error){
         // A missing table means the SQL schema hasn't been (re-)run for this table yet — e.g. right after
         // an app update adds a new one (like Sales/Purchase Orders). Treat that specifically as "not set
@@ -845,7 +857,7 @@ function withRunningBalance(rows, opening, deltaFn, ascending){
   asc.forEach(r=>{ bal += deltaFn(r); r._runningBalance = round2(bal); });
   return ascending===false ? asc.slice().reverse() : asc;
 }
-function recalcAllAccountBalances(){
+function recalcAllAccountBalances(noSave){
   DB.accounts.forEach(a=>{
     const rows = DB.ledger.filter(e=>e.accountCode===a.code);
     const debit = rows.reduce((s,r)=>s+r.debit,0);
@@ -853,10 +865,10 @@ function recalcAllAccountBalances(){
     const movement = a.side==="Debit" ? (debit-credit) : (credit-debit);
     a.balance = round2(num(a.opening) + movement);
   });
-  Store.saveAll("accounts");
-  recalcAllPartyBalances();
+  if(!noSave) Store.saveAll("accounts");
+  recalcAllPartyBalances(noSave);
 }
-function recalcAllPartyBalances(){
+function recalcAllPartyBalances(noSave){
   const d = SETTINGS.defaultAccounts;
   DB.customers.forEach(c=>{
     const rows = DB.ledger.filter(e=>e.nameId===c.id && e.accountCode===d.debtors);
@@ -870,7 +882,7 @@ function recalcAllPartyBalances(){
     const debit = rows.reduce((sum,r)=>sum+r.debit,0), credit = rows.reduce((sum,r)=>sum+r.credit,0);
     s.balance = round2(num(s.opening) + credit - debit); // creditors are credit-normal
   });
-  Store.saveAll("customers"); Store.saveAll("suppliers");
+  if(!noSave){ Store.saveAll("customers"); Store.saveAll("suppliers"); }
 }
 // Mirrors the workbook's DebtorsListForm / CreditorsListForm / AccruedListForm logic exactly:
 // netAmount = (opening balance, only if the party's Date Created falls within the period) + sum(debit|credit in period on the relevant account)
@@ -1138,6 +1150,10 @@ async function loadCompany(companyId, err, opts){
   if(company){ applyCompanyInfo(company); }
   const result = await Store.loadAll();
   if(!result.ok){ if(err) err.textContent = "Signed in, but couldn't load your data. Check your connection and try again."; return false; }
+  // Account, customer and supplier balances are always worked out fresh from the ledger once a company's
+  // data is loaded — on every route in (sign-in, switching company, fallback), not just when a saved
+  // session is resumed. Otherwise a company whose stored balance snapshot is stale or empty shows 0.00.
+  recalcAllAccountBalances(true);
   const membership = MY_MEMBERSHIPS.find(m=>m.company_id===companyId);
   if(membership && membership.status==="invited"){
     await sb.from("memberships").update({status:"active"}).eq("user_id", AUTH_USER.id).eq("company_id", CURRENT_COMPANY_ID);
@@ -2115,10 +2131,10 @@ function orderStatusChip(status){
 function orderTotalsBlockHtml(t){
   return `<div style="max-width:320px;margin-left:auto;font-size:13px">
     <div style="display:flex;justify-content:space-between"><span>Sub Total</span><b>${money(t.subTotal)}</b></div>
-    ${t.vatPct?`<div style="display:flex;justify-content:space-between"><span>VAT (${t.vatPct}%)</span><span>${money(t.vat)}</span></div>`:""}
     ${t.nhilPct?`<div style="display:flex;justify-content:space-between"><span>NHIL (${t.nhilPct}%)</span><span>${money(t.nhil)}</span></div>`:""}
     ${t.getfundPct?`<div style="display:flex;justify-content:space-between"><span>GETFund (${t.getfundPct}%)</span><span>${money(t.getfund)}</span></div>`:""}
     ${t.covidPct?`<div style="display:flex;justify-content:space-between"><span>Covid Levy (${t.covidPct}%)</span><span>${money(t.covid)}</span></div>`:""}
+    ${t.vatPct?`<div style="display:flex;justify-content:space-between"><span>VAT (${t.vatPct}%)</span><span>${money(t.vat)}</span></div>`:""}
     <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-size:15px"><span><b>Total Amount</b></span><b>${money(t.totalAmount)}</b></div>
   </div>`;
 }
@@ -2488,10 +2504,10 @@ function renderSaleTotals(){
 function totalsBlockHtml(t,cashDisc,net,vatWithheld){
   return `<div style="max-width:320px;margin-left:auto;font-size:13px">
     <div style="display:flex;justify-content:space-between"><span>Sub Total</span><b>${money(t.subTotal)}</b></div>
-    ${t.vatPct?`<div style="display:flex;justify-content:space-between"><span>VAT (${t.vatPct}%)</span><span>${money(t.vat)}</span></div>`:""}
     ${t.nhilPct?`<div style="display:flex;justify-content:space-between"><span>NHIL (${t.nhilPct}%)</span><span>${money(t.nhil)}</span></div>`:""}
     ${t.getfundPct?`<div style="display:flex;justify-content:space-between"><span>GETFund (${t.getfundPct}%)</span><span>${money(t.getfund)}</span></div>`:""}
     ${t.covidPct?`<div style="display:flex;justify-content:space-between"><span>Covid Levy (${t.covidPct}%)</span><span>${money(t.covid)}</span></div>`:""}
+    ${t.vatPct?`<div style="display:flex;justify-content:space-between"><span>VAT (${t.vatPct}%)</span><span>${money(t.vat)}</span></div>`:""}
     <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:6px;padding-top:6px"><span>Total</span><b>${money(t.totalAmount)}</b></div>
     <div style="display:flex;justify-content:space-between"><span>Cash Discount</span><span>-${money(cashDisc)}</span></div>
     ${vatWithheld?`<div style="display:flex;justify-content:space-between"><span>VAT Withheld by Customer (${SETTINGS.taxRates.vatWithholding||0}%)</span><span>-${money(vatWithheld)}</span></div>`:""}
@@ -2564,10 +2580,10 @@ async function submitSale(closeAfter){
   entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:mainAcct, debit:netAmount, credit:0, reference:invoiceNumber, narration});
   if(cashDiscount>0) entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:d.salesDiscount, debit:cashDiscount, credit:0, reference:invoiceNumber, narration:"Cash discount"});
   entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:d.salesIncome, debit:0, credit:t.subTotal, reference:invoiceNumber, narration});
-  if(t.vat) entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:d.outputVAT, debit:0, credit:t.vat, reference:invoiceNumber, narration:"Output VAT"});
   if(t.nhil) entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:d.outputNHIL, debit:0, credit:t.nhil, reference:invoiceNumber, narration:"Output NHIL"});
   if(t.getfund) entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:d.outputGetFund, debit:0, credit:t.getfund, reference:invoiceNumber, narration:"Output GETFund"});
   if(t.covid) entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:d.outputCovid, debit:0, credit:t.covid, reference:invoiceNumber, narration:"Output Covid Levy"});
+  if(t.vat) entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:d.outputVAT, debit:0, credit:t.vat, reference:invoiceNumber, narration:"Output VAT"});
   if(vatWithheld>0) entries.push({date, type:"Sales Invoice", sourceType:"sales", sourceId:sale.id, nameId:cust.id, name:cust.name, accountCode:d.vatWithholding, debit:vatWithheld, credit:0, reference:invoiceNumber, narration:`VAT Withheld by Customer (${vatWithholdingPct}%)`});
   if(costOfSales>0){
     entries.push({date, type:"Sales Invoice (COGS)", sourceType:"sales", sourceId:sale.id, nameId:"", name:"", accountCode:d.costOfSales, debit:round2(costOfSales), credit:0, reference:invoiceNumber, narration:"Cost of sales"});
@@ -2906,10 +2922,10 @@ async function submitPurchase(closeAfter){
   const entries = [];
   const mainAcct = isCash ? paymentAcct : d.creditors;
   entries.push({date, type:"Purchase Invoice", sourceType:"purchases", sourceId:purch.id, nameId:supp.id, name:supp.name, accountCode:d.purchasesAccount, debit:t.subTotal, credit:0, reference:invoiceNumber, narration});
-  if(t.vat) entries.push({date, type:"Purchase Invoice", sourceType:"purchases", sourceId:purch.id, nameId:supp.id, name:supp.name, accountCode:d.inputVAT, debit:t.vat, credit:0, reference:invoiceNumber, narration:"Input VAT"});
   if(t.nhil) entries.push({date, type:"Purchase Invoice", sourceType:"purchases", sourceId:purch.id, nameId:supp.id, name:supp.name, accountCode:d.inputNHIL, debit:t.nhil, credit:0, reference:invoiceNumber, narration:"Input NHIL"});
   if(t.getfund) entries.push({date, type:"Purchase Invoice", sourceType:"purchases", sourceId:purch.id, nameId:supp.id, name:supp.name, accountCode:d.inputGetFund, debit:t.getfund, credit:0, reference:invoiceNumber, narration:"Input GETFund"});
   if(t.covid) entries.push({date, type:"Purchase Invoice", sourceType:"purchases", sourceId:purch.id, nameId:supp.id, name:supp.name, accountCode:d.inputCovid, debit:t.covid, credit:0, reference:invoiceNumber, narration:"Input Covid Levy"});
+  if(t.vat) entries.push({date, type:"Purchase Invoice", sourceType:"purchases", sourceId:purch.id, nameId:supp.id, name:supp.name, accountCode:d.inputVAT, debit:t.vat, credit:0, reference:invoiceNumber, narration:"Input VAT"});
   if(cashDiscount>0) entries.push({date, type:"Purchase Invoice", sourceType:"purchases", sourceId:purch.id, nameId:supp.id, name:supp.name, accountCode:d.purchasesDiscount, debit:0, credit:cashDiscount, reference:invoiceNumber, narration:"Cash discount"});
   entries.push({date, type:"Purchase Invoice", sourceType:"purchases", sourceId:purch.id, nameId:supp.id, name:supp.name, accountCode:mainAcct, debit:0, credit:netAmount, reference:invoiceNumber, narration});
   await postEntries(entries, transId);
@@ -3526,10 +3542,10 @@ async function submitExpense(closeAfter){
   await Store.upsert("expenses", exp);
   const entries = [];
   entries.push({date, type:"Expense", sourceType:"expenses", sourceId:exp.id, nameId:supp.id, name:supp.name, accountCode:catCode, debit:amt, credit:0, reference:invoiceNumber, narration});
-  if(vat) entries.push({date, type:"Expense", sourceType:"expenses", sourceId:exp.id, nameId:supp.id, name:supp.name, accountCode:d.inputVAT, debit:vat, credit:0, reference:invoiceNumber, narration:"Input VAT"});
   if(nhil) entries.push({date, type:"Expense", sourceType:"expenses", sourceId:exp.id, nameId:supp.id, name:supp.name, accountCode:d.inputNHIL, debit:nhil, credit:0, reference:invoiceNumber, narration:"Input NHIL"});
   if(getfund) entries.push({date, type:"Expense", sourceType:"expenses", sourceId:exp.id, nameId:supp.id, name:supp.name, accountCode:d.inputGetFund, debit:getfund, credit:0, reference:invoiceNumber, narration:"Input GETFund"});
   if(covid) entries.push({date, type:"Expense", sourceType:"expenses", sourceId:exp.id, nameId:supp.id, name:supp.name, accountCode:d.inputCovid, debit:covid, credit:0, reference:invoiceNumber, narration:"Input Covid Levy"});
+  if(vat) entries.push({date, type:"Expense", sourceType:"expenses", sourceId:exp.id, nameId:supp.id, name:supp.name, accountCode:d.inputVAT, debit:vat, credit:0, reference:invoiceNumber, narration:"Input VAT"});
   if(cashDiscount>0) entries.push({date, type:"Expense", sourceType:"expenses", sourceId:exp.id, nameId:supp.id, name:supp.name, accountCode:d.purchasesDiscount, debit:0, credit:cashDiscount, reference:invoiceNumber, narration:"Cash discount"});
   const creditAcct = isCash ? paymentAcct : d.accruedExpense;
   entries.push({date, type:"Expense", sourceType:"expenses", sourceId:exp.id, nameId:supp.id, name:supp.name, accountCode:creditAcct, debit:0, credit:netAmount, reference:invoiceNumber, narration});
