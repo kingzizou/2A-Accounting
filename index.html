@@ -591,7 +591,11 @@ const Store = {
 
 function tryConnectSupabase(url,key){
   if(!url||!key) { sb=null; return false; }
-  try{ sb = window.supabase.createClient(url,key); return true; }catch(e){ sb=null; return false; }
+  try{ sb = window.supabase.createClient(url,key);
+    // Belt and braces: if supabase-js reports a password-recovery session, show the new-password form
+    // even when the URL hash wasn't recognised at load.
+    sb.auth.onAuthStateChange((ev)=>{ if(ev==="PASSWORD_RECOVERY") setTimeout(showNewPasswordForm,0); });
+    return true; }catch(e){ sb=null; return false; }
 }
 
 /* ---------------- Small utils ---------------- */
@@ -1000,6 +1004,9 @@ async function forgotPassword(){
   err.textContent = "If that email has an account, a password-reset link has been sent. Open it, set a new password, then sign in.";
 }
 const RECOVERY_MODE = /type=recovery/.test(location.hash || "");
+// The reset link is single-use and short-lived. Email programs that "preview" links, or clicking it twice,
+// use it up — Supabase then sends us back with error=otp_expired.
+const RECOVERY_LINK_ERROR = /error_code=otp_expired|error=access_denied/.test(location.hash || "");
 function showNewPasswordForm(){
   const ls = document.getElementById("loginScreen");
   ls.innerHTML = `<div class="card"><h1>2A PRINTS ACCOUNTING</h1><div class="sub">Set a new password</div>
@@ -7125,6 +7132,11 @@ async function bootLogin(){
   if(!session){
     document.getElementById("loginScreen").classList.remove("hidden");
     prefillRememberedUsername();
+    if(RECOVERY_LINK_ERROR){
+      const le = document.getElementById("loginErr");
+      le.textContent = "That password-reset link has expired or was already used. Type your email and click “Forgot password?” to get a new one, then open it straight away.";
+      history.replaceState(null, "", location.pathname);
+    }
     document.getElementById(document.getElementById("authEmail").value ? "authPass" : "authEmail").focus();
     document.getElementById("authPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ __lastActionBtn = document.getElementById("authSubmitBtn"); (AUTH_MODE==="signup"?doSignup:doLogin)(); } });
     return;
