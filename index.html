@@ -235,6 +235,10 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-wei
     <div class="field" id="authCompanyField" style="display:none"><label>Company Name</label><input id="authCompany" style="width:100%" placeholder="My Company Ltd"></div>
     <div class="field"><label>Email</label><input id="authEmail" type="email" style="width:100%" placeholder="you@company.com"></div>
     <div class="field"><label>Password</label><input id="authPass" type="password" style="width:100%" placeholder="••••••••"></div>
+    <div id="authRememberRow" style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:-2px 0 6px">
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400;cursor:pointer"><input type="checkbox" id="authRemember" style="width:auto"> Remember username</label>
+      <a href="#" id="authForgotLink" onclick="forgotPassword();return false" style="color:var(--accent)">Forgot password?</a>
+    </div>
     <div id="loginErr"></div>
     <button class="btn primary" id="authSubmitBtn" style="width:100%;justify-content:center;margin-top:8px" onclick="doLogin()">Sign in</button>
     <div style="text-align:center;margin-top:12px;font-size:13px">
@@ -960,11 +964,62 @@ let MY_MEMBERSHIPS = []; // every company this login belongs to: [{company_id, r
 function toggleAuthMode(){
   AUTH_MODE = AUTH_MODE==="signin" ? "signup" : "signin";
   document.getElementById("authCompanyField").style.display = AUTH_MODE==="signup" ? "" : "none";
+  document.getElementById("authRememberRow").style.display = AUTH_MODE==="signup" ? "none" : "flex";
   document.getElementById("authSub").textContent = AUTH_MODE==="signup" ? "Create your company account" : "Sign in to continue";
   document.getElementById("authSubmitBtn").textContent = AUTH_MODE==="signup" ? "Create account" : "Sign in";
   document.getElementById("authSubmitBtn").setAttribute("onclick", AUTH_MODE==="signup" ? "doSignup()" : "doLogin()");
   document.getElementById("authToggleLink").textContent = AUTH_MODE==="signup" ? "Already have an account? Sign in" : "Need an account? Sign up";
   const err = document.getElementById("loginErr"); err.textContent = ""; err.style.color = "";
+}
+
+
+/* ---- Remember username / Forgot password / Set new password ---- */
+const REMEMBER_KEY = "acct2a_remembered_email";
+function saveRememberedUsername(email){
+  try{
+    if(document.getElementById("authRemember")?.checked) localStorage.setItem(REMEMBER_KEY, email);
+    else localStorage.removeItem(REMEMBER_KEY);
+  }catch(e){}
+}
+function prefillRememberedUsername(){
+  try{
+    const e = localStorage.getItem(REMEMBER_KEY);
+    if(e){ document.getElementById("authEmail").value = e; document.getElementById("authRemember").checked = true; }
+  }catch(e){}
+}
+async function forgotPassword(){
+  const email = document.getElementById("authEmail").value.trim();
+  const err = document.getElementById("loginErr"); err.style.color = ""; err.textContent = "";
+  if(!email){ err.textContent = "Type your email above first, then click Forgot password."; document.getElementById("authEmail").focus(); return; }
+  // From the web app, return to this same page; from the desktop app (no web address of its own),
+  // return to the hosted web app on GitHub Pages, where the new-password screen opens.
+  const opts = { redirectTo: /^https?:$/.test(location.protocol) ? location.origin + location.pathname : "https://kingzizou.github.io/2A-Accounting/" };
+  const { error } = await sb.auth.resetPasswordForEmail(email, opts);
+  if(error){ err.textContent = error.message || "Couldn't send the reset email."; return; }
+  err.style.color = "var(--accent)";
+  err.textContent = "If that email has an account, a password-reset link has been sent. Open it, set a new password, then sign in.";
+}
+const RECOVERY_MODE = /type=recovery/.test(location.hash || "");
+function showNewPasswordForm(){
+  const ls = document.getElementById("loginScreen");
+  ls.innerHTML = `<div class="card"><h1>2A PRINTS ACCOUNTING</h1><div class="sub">Set a new password</div>
+    <div class="field"><label>New password</label><input id="np1" type="password" style="width:100%" placeholder="At least 8 characters"></div>
+    <div class="field"><label>Confirm new password</label><input id="np2" type="password" style="width:100%"></div>
+    <div id="npErr"></div>
+    <button class="btn primary" style="width:100%;justify-content:center;margin-top:8px" onclick="saveNewPassword()">Save password</button></div>`;
+  ls.classList.remove("hidden");
+}
+async function saveNewPassword(){
+  const a = document.getElementById("np1").value, b = document.getElementById("np2").value;
+  const err = document.getElementById("npErr"); err.style.color = ""; err.textContent = "";
+  if(a.length<8){ err.textContent = "Password must be at least 8 characters."; return; }
+  if(a!==b){ err.textContent = "The two passwords don't match."; return; }
+  const { error } = await sb.auth.updateUser({ password: a });
+  if(error){ err.textContent = error.message || "Couldn't update the password."; return; }
+  await sb.auth.signOut();
+  history.replaceState(null, "", location.pathname);
+  alert("Password updated. Please sign in with your new password.");
+  location.reload();
 }
 
 async function doLogin(){
@@ -976,6 +1031,7 @@ async function doLogin(){
   try{
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if(error){ err.textContent = error.message || "Incorrect email or password."; return; }
+    saveRememberedUsername(email);
     await afterAuthSuccess(data.user);
   } finally {
     hideActionLoading(btn);
@@ -7061,10 +7117,15 @@ window.addEventListener("DOMContentLoaded", async ()=>{
 // before entering the app — that's the one case shown as "Loading…" below.
 async function bootLogin(){
   document.getElementById("connectScreen").classList.add("hidden");
+  if(RECOVERY_MODE){
+    await new Promise(r=>setTimeout(r,600)); // let supabase-js read the recovery token from the URL
+    showNewPasswordForm(); return;
+  }
   const { data: { session } } = await sb.auth.getSession();
   if(!session){
     document.getElementById("loginScreen").classList.remove("hidden");
-    document.getElementById("authEmail").focus();
+    prefillRememberedUsername();
+    document.getElementById(document.getElementById("authEmail").value ? "authPass" : "authEmail").focus();
     document.getElementById("authPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ __lastActionBtn = document.getElementById("authSubmitBtn"); (AUTH_MODE==="signup"?doSignup:doLogin)(); } });
     return;
   }
