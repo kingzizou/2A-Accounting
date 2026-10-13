@@ -39,3 +39,12 @@ jobs:
             gh release create "$TAG" --repo "$RELEASES_REPO" --title "$TAG" --notes "2A Prints Accounting $TAG"
           fi
           gh release upload "$TAG" --repo "$RELEASES_REPO" --clobber dist/*.zip dist/latest-mac.yml
+          # Fixed-name copies so the website's download buttons never change between versions
+          mkdir -p stable
+          for f in dist/*.zip; do
+            case "$f" in
+              *arm64*) cp "$f" stable/2A-Prints-Accounting-mac-arm64.zip ;;
+              *)       cp "$f" stable/2A-Prints-Accounting-mac-x64.zip ;;
+            esac
+          done
+          gh release upload "$TAG" --repo "$RELEASES_REPO" --clobber stable/*.zip
