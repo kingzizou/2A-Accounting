@@ -91,6 +91,9 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-wei
 #sidebar .navitem.active{background:var(--accent-soft);color:var(--accent);font-weight:700}
 #sidebar .footer{padding:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
 #main{flex:1;min-width:0;display:flex;flex-direction:column}
+#roBanner{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 20px;background:var(--accent-soft);border-bottom:2px solid var(--accent-2);font-size:14px}
+#roBanner b{font-weight:700}
+#roBanner .ro-actions{display:flex;gap:8px;flex-wrap:wrap}
 #topbar{height:56px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--panel)}
 #topbar .status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
 #topbar .dot{width:8px;height:8px;border-radius:99px;background:var(--muted)}
@@ -269,6 +272,7 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-wei
         <button id="themeBtn" onclick="toggleTheme()">🌙</button>
       </div>
     </div>
+    <div id="roBanner" class="hidden"></div>
     <div id="view"></div>
   </div>
 </div>
@@ -561,6 +565,7 @@ const Store = {
   // already-cleared/replaced DB[t] array, so this cleanup step is what actually makes those deletions real.
   async saveAll(t){
     if(!sb || !CURRENT_COMPANY_ID) return;
+    if(READ_ONLY){ readOnlyBlocked(t); return; }
     const rows = DB[t].map(o=>({id:o.id, company_id:CURRENT_COMPANY_ID, data:o}));
     if(rows.length){ const {error}=await sb.from("acct_"+t).upsert(rows, {onConflict:"company_id,id"}); if(error){ console.warn("save fail",t,error.message); toast(saveFailMessage(t,error), true); } }
     const existing = await sb.from("acct_"+t).select("id").eq("company_id", CURRENT_COMPANY_ID);
@@ -572,6 +577,7 @@ const Store = {
   },
   async upsert(t,obj){
     if(!sb || !CURRENT_COMPANY_ID) return;
+    if(READ_ONLY){ readOnlyBlocked(t); return; }
     const arr = DB[t]; const idx = arr.findIndex(x=>x.id===obj.id);
     const action = idx>=0 ? "update" : "save";
     const btn = showActionLoading(action,t);
@@ -585,6 +591,7 @@ const Store = {
   },
   async remove(t,id){
     if(!sb || !CURRENT_COMPANY_ID) return;
+    if(READ_ONLY){ readOnlyBlocked(t); return; }
     const btn = showActionLoading("delete",t);
     try{
       DB[t] = DB[t].filter(x=>x.id!==id);
@@ -596,6 +603,7 @@ const Store = {
   },
   async saveSettings(){
     if(!sb || !CURRENT_COMPANY_ID) return;
+    if(READ_ONLY){ readOnlyBlocked("settings"); return; }
     const {error}=await sb.from("acct_settings").upsert({id:"main", company_id:CURRENT_COMPANY_ID, data:SETTINGS}, {onConflict:"company_id,id"});
     if(error){ console.warn("settings save fail",error.message); toast(saveFailMessage("settings",error), true); }
   }
@@ -766,7 +774,7 @@ function byId(arr,id){ return arr.find(x=>x.id===id); }
 function accByCode(code){ return DB.accounts.find(a=>a.code===code); }
 function nextNumber(key){ const n = SETTINGS.nextNumbers[key]||1; SETTINGS.nextNumbers[key]=n+1; Store.saveSettings(); return n; }
 function formatDocNumber(prefixKey, n){ const p = SETTINGS.prefixes[prefixKey]||""; return p + String(n).padStart(4,"0"); }
-function can(module){ if(!CURRENT_USER) return false; const role = byId(DB.roles, CURRENT_USER.roleId); if(!role) return false; const p = role.permissions[module]; return p==="Edit"; }
+function can(module){ if(READ_ONLY) return false; if(!CURRENT_USER) return false; const role = byId(DB.roles, CURRENT_USER.roleId); if(!role) return false; const p = role.permissions[module]; return p==="Edit"; }
 function canView(module){ if(!CURRENT_USER) return false; const role = byId(DB.roles, CURRENT_USER.roleId); if(!role) return false; const p = role.permissions[module]; return p==="Edit"||p==="View"; }
 
 /* ---------------- FIFO costing ---------------- */
@@ -973,6 +981,11 @@ function navigate(key){
    that person belongs to and loads only that company's data. */
 let AUTH_MODE = "signin"; // "signin" | "signup"
 let CURRENT_COMPANY_ID = null;
+// Read-only grace period: when a licence or trial runs out, the company stays openable for GRACE_DAYS more
+// days in READ-ONLY mode (view + export/backup, no new or changed records) so nobody is locked out of
+// their own books. After that the normal "registration required" screen takes over.
+const GRACE_DAYS = 7;
+let READ_ONLY = false;
 let COMPANY_INFO = { max_users:1, plan_tier:"trial" }; // refreshed in afterAuthSuccess on every login
 let AUTH_USER = null; // the raw Supabase Auth user for the current session; needed to reload data when switching companies
 let MY_MEMBERSHIPS = []; // every company this login belongs to: [{company_id, role, status, name}]
@@ -1141,13 +1154,13 @@ async function loadCompany(companyId, err, opts){
   const prevCompanyId = CURRENT_COMPANY_ID;
   CURRENT_COMPANY_ID = companyId;
   const { data: company } = await sb.from("companies").select("*").eq("id", CURRENT_COMPANY_ID).maybeSingle();
-  if(company && !isSubscriptionUsable(company)){
+  if(company && licenseAccess(company).mode==="expired"){
     // Soft mode: report "expired" and put everything back as it was, so the caller can pick another
     // company or just stay where the person is — nothing about the running session changes.
     if(opts && opts.soft){ CURRENT_COMPANY_ID = prevCompanyId; return "expired"; }
     showBillingRequired(); return false;
   }
-  if(company){ applyCompanyInfo(company); }
+  if(company){ applyCompanyInfo(company); } else { READ_ONLY = false; updateReadOnlyUi(); }
   const result = await Store.loadAll();
   if(!result.ok){ if(err) err.textContent = "Signed in, but couldn't load your data. Check your connection and try again."; return false; }
   // Account, customer and supplier balances are always worked out fresh from the ledger once a company's
@@ -1219,10 +1232,49 @@ function msPerDay(){ return 86400000; }
 // switch and after registering).
 function applyCompanyInfo(company){
   COMPANY_INFO = { max_users: company.max_users||1, plan_tier: company.plan_tier||"trial", license_key: company.license_key||"", raw: company };
+  READ_ONLY = licenseAccess(company).mode==="grace";
+  updateReadOnlyUi();
 }
 function daysLeftUntil(iso){
   if(!iso) return null;
   return Math.ceil((new Date(iso).getTime() - Date.now()) / msPerDay());
+}
+
+// When did this company's licence (or free trial) end? null = it does not end (lifetime / legacy active).
+function licenseEndDate(company){
+  if(Number(company.license_type)===2) return null;
+  if(company.license_expires_at) return new Date(company.license_expires_at);
+  if(company.subscription_status==="active") return null;
+  if(company.trial_ends_at) return new Date(company.trial_ends_at);
+  return null;
+}
+// "active" = fully usable; "grace" = ended within the last GRACE_DAYS days (read-only); "expired" = locked.
+function licenseAccess(company){
+  if(isSubscriptionUsable(company)) return { mode:"active" };
+  const end = licenseEndDate(company);
+  if(!end) return { mode:"expired" };
+  const graceEnd = new Date(end.getTime() + GRACE_DAYS*msPerDay());
+  if(Date.now() < graceEnd.getTime()){
+    return { mode:"grace", end, graceEnd, daysLeft: Math.max(1, Math.ceil((graceEnd.getTime()-Date.now())/msPerDay())) };
+  }
+  return { mode:"expired", end };
+}
+let _roToastAt = 0;
+function readOnlyBlocked(table){
+  if(table==="users") return; // sign-in housekeeping, not something the person tried to save
+  const now = Date.now();
+  if(now - _roToastAt > 4000){ _roToastAt = now; toast("Read-only mode: your licence has ended, so nothing can be added or changed. You can still view and export your data. Enter a licence key to continue.", true); }
+}
+// Shows or hides the read-only bar. Called whenever a company's licence info is applied.
+function updateReadOnlyUi(){
+  const el = document.getElementById("roBanner"); if(!el) return;
+  if(!READ_ONLY){ el.classList.add("hidden"); el.innerHTML=""; return; }
+  const acc = licenseAccess(COMPANY_INFO.raw||{});
+  const endTxt = acc.end ? acc.end.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"}) : "";
+  const d = acc.daysLeft||0;
+  el.innerHTML = `<div><b>Read-only mode.</b> Your licence ended${endTxt?" on "+esc(endTxt):""}. You can still view everything and export your data for <b>${d} more day${d===1?"":"s"}</b>, then the app locks until you register.</div>
+    <div class="ro-actions"><button class="btn" onclick="exportBackup()">⬇ Export all data (backup)</button><button class="btn primary" onclick="openRegistrationModal()">Enter licence key</button></div>`;
+  el.classList.remove("hidden");
 }
 
 function isSubscriptionUsable(company){
@@ -1404,6 +1456,7 @@ async function submitRegistration(inApp){
       closeModal();
       const { data: company } = await sb.from("companies").select("*").eq("id", CURRENT_COMPANY_ID).maybeSingle();
       if(company) applyCompanyInfo(company);
+      navigate(CURRENT_VIEW);   // re-draw the screen so edit buttons come back once the licence is renewed
       toast((type===2 ? "Registered for life" : "Registered until "+expires.toLocaleDateString())+" for "+users+" user"+(users===1?"":"s")+". Thank you!"+usersNote);
     } else {
       alert((type===2 ? "Your application has been successfully registered for life" : "Your application has been successfully registered until "+expires.toLocaleDateString(undefined,{weekday:"long",year:"numeric",month:"long",day:"numeric"}))+", for "+users+" user"+(users===1?"":"s")+"."+usersNote);
