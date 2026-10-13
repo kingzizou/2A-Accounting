@@ -1,0 +1,30 @@
+# Publishes the phone/tablet web app (installable PWA) to GitHub Pages on every version tag.
+# One-time setup: repo Settings > Pages > Build and deployment > Source = "GitHub Actions".
+name: Deploy web app
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir site
+          cp index.html site/
+          cp -r web/* site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
