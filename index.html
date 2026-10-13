@@ -1009,7 +1009,7 @@ async function forgotPassword(){
   if(!email){ err.textContent = "Type your email above first, then click Forgot password."; document.getElementById("authEmail").focus(); return; }
   // From the web app, return to this same page; from the desktop app (no web address of its own),
   // return to the hosted web app on GitHub Pages, where the new-password screen opens.
-  const opts = { redirectTo: /^https?:$/.test(location.protocol) ? location.origin + location.pathname : "https://kingzizou.github.io/2A-Accounting/" };
+  const opts = { redirectTo: /^https?:$/.test(location.protocol) ? location.origin + location.pathname : "https://kingzizou.github.io/2A-Accounting-releases/" };
   const { error } = await sb.auth.resetPasswordForEmail(email, opts);
   if(error){ err.textContent = error.message || "Couldn't send the reset email."; return; }
   err.style.color = "var(--accent)";
