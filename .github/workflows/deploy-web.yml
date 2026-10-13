@@ -1,0 +1,36 @@
+# Publishes the phone/tablet web app (installable PWA) to GitHub Pages on every version tag.
+# The site is served from the PUBLIC releases repo (branch gh-pages), so this source repo can stay private.
+# One-time setup in kingzizou/2A-Accounting-releases:
+#   Settings > Pages > Build and deployment > Source = "Deploy from a branch", Branch = gh-pages, folder = / (root).
+# Uses the same RELEASES_TOKEN secret as build-mac.yml (Contents: Read and write on the releases repo).
+name: Deploy web app
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  RELEASES_REPO: kingzizou/2A-Accounting-releases
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir site
+          cp index.html site/
+          cp -r web/* site/
+          touch site/.nojekyll
+      - name: Publish to gh-pages of the releases repo
+        env:
+          TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          cd site
+          git init -q -b gh-pages
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy web app ${GITHUB_REF_NAME:-manual}"
+          git push --force "https://x-access-token:${TOKEN}@github.com/${RELEASES_REPO}.git" gh-pages
