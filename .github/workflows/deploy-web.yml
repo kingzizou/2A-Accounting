@@ -2,6 +2,7 @@
 # The site is served from the PUBLIC releases repo (branch gh-pages), so this source repo can stay private.
 # One-time setup in kingzizou/2A-Accounting-releases:
 #   Settings > Pages > Build and deployment > Source = "Deploy from a branch", Branch = gh-pages, folder = / (root).
+# The sales landing page (landing/) is published at /get/ next to the app: https://kingzizou.github.io/2A-Accounting-releases/get/
 # Uses the same RELEASES_TOKEN secret as build-mac.yml (Contents: Read and write on the releases repo).
 name: Deploy web app
 on:
@@ -22,6 +23,8 @@ jobs:
           mkdir site
           cp index.html site/
           cp -r web/* site/
+          mkdir site/get
+          cp landing/*.html site/get/
           touch site/.nojekyll
       - name: Publish to gh-pages of the releases repo
         env:
