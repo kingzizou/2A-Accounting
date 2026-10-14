@@ -1,0 +1,426 @@
+<title>2A Prints Accounting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+/* Layout concept: left-aligned editorial hero with a real invoice tax block as the proof;
+   feature list as a ruled two-column index; pricing as three ruled columns. */
+:root{
+  --bg:#F4F7FB; --panel:#FFFFFF; --ink:#0E2236; --muted:#52657A; --line:#D5DDE8;
+  --accent:#0B5CA8; --accent-ink:#FFFFFF; --accent-soft:#E3EEF9; --navy:#0E2236; --gold:#B8861B;
+  --display:"Cinzel","Times New Roman",Georgia,serif;
+  --body:"Montserrat",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0A1624; --panel:#102237; --ink:#E8EEF6; --muted:#9DB0C6; --line:#23384F;
+    --accent:#4B9BE8; --accent-ink:#06121F; --accent-soft:#12304D; --navy:#06101C; --gold:#E0B04A; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0A1624; --panel:#102237; --ink:#E8EEF6; --muted:#9DB0C6; --line:#23384F;
+  --accent:#4B9BE8; --accent-ink:#06121F; --accent-soft:#12304D; --navy:#06101C; --gold:#E0B04A; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6;margin:0;padding-inline:20px}
+.wrap{max-width:1120px;margin-inline:auto}
+a{color:inherit}
+h1,h2,h3{font-family:var(--display);font-weight:800;line-height:1.12;margin:0;text-wrap:balance;letter-spacing:.01em}
+p{margin:0}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:600 15px/1 var(--body);padding:15px 22px;border-radius:6px;border:1.5px solid var(--accent);background:var(--accent);color:var(--accent-ink);text-decoration:none;cursor:pointer}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+
+/* header */
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:18px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none}
+.brand svg{width:40px;height:40px;flex:none}
+.brand b{font-family:var(--display);font-size:17px;letter-spacing:.06em;font-weight:800}
+nav{display:flex;align-items:center;gap:22px;font-size:14px;font-weight:500}
+nav a{text-decoration:none;color:var(--muted)}
+nav a:hover{color:var(--ink)}
+nav .btn{padding:11px 16px;font-size:14px;color:var(--accent-ink)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center;padding-block:56px 72px}
+.hero h1{font-size:clamp(34px,5.2vw,58px);margin-block:14px 20px}
+.hero .lead{font-size:18px;color:var(--muted);max-width:34em}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.fine{font-size:13px;color:var(--muted);margin-top:14px}
+
+.invoice{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px;box-shadow:0 18px 50px rgba(14,34,54,.12);min-width:0}
+.invoice .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:6px}
+.invoice .top span{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.invoice .top b{font-size:14px}
+.items{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.items td{padding:8px 0;border-bottom:1px dashed var(--line)}
+.items td:last-child{text-align:right}
+.items .q{color:var(--muted);padding-inline:8px}
+.tax{font-variant-numeric:tabular-nums;font-size:14px;margin-top:10px}
+.tax div{display:flex;justify-content:space-between;padding:5px 0}
+.tax .sub{font-weight:700}
+.tax .hl{display:block;background:var(--accent-soft);margin-inline:-26px;padding-inline:26px;border-block:1px solid var(--line)}
+.tax .hl div{padding:6px 0}
+.tax .total{border-top:2px solid var(--ink);margin-top:8px;padding-top:12px;font-size:19px;font-weight:700}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-top:12px}
+
+/* sections */
+section{padding-block:64px;border-top:1px solid var(--line)}
+section h2{font-size:clamp(26px,3.4vw,38px);margin-block:10px 14px}
+.sec-lead{color:var(--muted);max-width:40em;font-size:17px}
+.index{display:grid;grid-template-columns:1fr 1fr;column-gap:56px;margin-top:36px}
+.index div{padding-block:20px;border-top:1px solid var(--line);min-width:0}
+.index h3{font-size:18px;margin-bottom:6px;font-family:var(--body);font-weight:700;letter-spacing:0}
+.index p{color:var(--muted);font-size:15px}
+
+.where{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:34px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.where div{padding:22px;border-right:1px solid var(--line);min-width:0}
+.where div:last-child{border-right:0}
+.where b{display:block;font-family:var(--display);font-size:18px;margin-bottom:4px}
+.where span{display:block;font-size:14px;color:var(--muted);margin-bottom:14px}
+.where .btn{width:100%;padding:12px 14px;font-size:14px;margin-top:8px}
+.where .btn:first-of-type{margin-top:0}
+.where small{display:block;font-size:12px;color:var(--muted);margin-top:10px}
+.install{margin-top:26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;font-size:14px;color:var(--muted)}
+.install b{color:var(--ink);display:block;margin-bottom:4px;font-size:15px}
+
+
+.calc{display:grid;grid-template-columns:1fr 1.1fr;gap:20px;margin-top:36px;align-items:stretch}
+.calc .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:28px;min-width:0}
+.calc label{display:block;font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.calc input,.calc select{width:100%;font:600 18px var(--body);padding:12px 14px;border-radius:6px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.calc input:focus,.calc select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.calc .row{margin-bottom:20px}
+.calc .inc{list-style:none;padding:0;margin:24px 0 0;font-size:15px}
+.calc .inc li{padding-block:8px;border-top:1px solid var(--line)}
+.calc .total{font-family:var(--display);font-size:clamp(40px,6vw,58px);font-weight:800;line-height:1.05;font-variant-numeric:lining-nums}
+.calc .sub{color:var(--muted);font-size:14px;margin-top:6px}
+.calc .save{display:inline-block;margin-top:14px;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:13px;padding:6px 10px;border-radius:5px}
+.calc .lines{margin:18px 0 22px;padding:0;list-style:none;font-size:14px;color:var(--muted)}
+.calc .lines li{display:flex;justify-content:space-between;gap:12px;padding-block:6px;border-top:1px solid var(--line)}
+.calc .btn{width:100%}
+.rates{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:20px;font-size:14px;color:var(--muted)}
+.rates b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+.tablewrap{overflow-x:auto;margin-top:24px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.tablewrap table{border-collapse:collapse;width:100%;min-width:420px;font-size:15px;font-variant-numeric:lining-nums tabular-nums}
+.tablewrap th,.tablewrap td{padding:12px 16px;text-align:right;border-top:1px solid var(--line)}
+.tablewrap th:first-child,.tablewrap td:first-child{text-align:left}
+.tablewrap thead th{border-top:0;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+@media (max-width:860px){.calc{grid-template-columns:1fr}}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:36px;align-items:stretch}
+.plan{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:28px;display:flex;flex-direction:column;min-width:0}
+.plan.feat{border:2px solid var(--accent)}
+.plan h3{font-size:20px}
+.plan .users{color:var(--muted);font-size:14px;margin-top:4px}
+.plan .price{font-family:var(--display);font-size:38px;font-weight:800;margin-block:20px 2px;font-variant-numeric:lining-nums}
+.plan .price small{font-family:var(--body);font-size:14px;font-weight:600;color:var(--muted);margin-right:6px}
+.plan .per{font-size:13px;color:var(--muted);margin-bottom:18px}
+.plan ul{list-style:none;padding:0;margin:0 0 24px;font-size:15px;flex:1}
+.plan li{padding-block:8px;border-top:1px solid var(--line)}
+.plan .btn{width:100%}
+.note{font-size:13px;color:var(--muted);margin-top:18px}
+
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:34px;border-top:1px solid var(--line)}
+.steps div{padding:22px 24px 8px 0;min-width:0}
+.steps b{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:14px;margin-bottom:12px}
+.steps h3{font-family:var(--body);font-size:17px;font-weight:700;letter-spacing:0;margin-bottom:6px}
+.steps p{color:var(--muted);font-size:15px}
+.bank{margin-top:28px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
+.bank span{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px}
+.bank code{font:600 18px var(--body);user-select:all;word-break:break-word}
+.bank button{margin-top:6px;font:600 12px var(--body);padding:6px 10px;border-radius:5px;border:1px solid var(--line);background:transparent;color:var(--accent);cursor:pointer}
+.faq{margin-top:30px;max-width:780px}
+.faq details{border-top:1px solid var(--line);padding-block:16px}
+.faq details:last-child{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;font-weight:600;font-size:16px;list-style:none;display:flex;justify-content:space-between;gap:16px}
+.faq summary::after{content:"+";color:var(--accent);font-weight:700}
+.faq details[open] summary::after{content:"\2212"}
+.faq p{color:var(--muted);margin-top:10px;font-size:15px}
+
+.closing{background:var(--navy);color:#fff;border-radius:14px;padding:44px;display:grid;grid-template-columns:1.3fr 1fr;gap:32px;align-items:center;margin-block:64px}
+.closing h2{margin:0 0 10px;font-size:clamp(24px,3vw,34px);color:#fff}
+.closing p{color:#B9C8DA}
+.closing .btn{background:#fff;color:#0E2236;border-color:#fff}
+.closing .btn.ghost{background:transparent;color:#fff;border-color:#4A6280}
+.contact{display:flex;flex-direction:column;gap:10px;font-size:15px}
+.contact span{color:#B9C8DA;font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
+.contact code{font:600 16px var(--body);color:#fff;user-select:all}
+footer{padding-block:0 40px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:36px;padding-block:32px 48px}
+  .index{grid-template-columns:1fr}
+  .where{grid-template-columns:1fr 1fr}
+  .where div:nth-child(2){border-right:0}
+  .where div:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .plans{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr}
+  .closing{grid-template-columns:1fr;padding:30px}
+  nav a:not(.btn){display:none}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+
+<div class="wrap">
+<header>
+  <a class="brand" href="#top" aria-label="2A Prints Accounting">
+    <svg viewBox="40 40 432 400" aria-hidden="true"><defs><linearGradient id="lg" x1="60" y1="0" x2="460" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0B5CA8"/><stop offset=".55" stop-color="#0C3F70"/><stop offset="1" stop-color="#0E2236"/></linearGradient></defs>
+      <path d="M256 70 L84 372 L428 372 Z" fill="url(#lg)" stroke="url(#lg)" stroke-width="64" stroke-linejoin="round"/>
+      <path d="M236 408 C 232 330 238 290 252 252 L 270 252 C 262 292 262 340 280 408 Z" fill="#fff"/>
+      <path d="M261 150 L 296 252 L 226 252 Z" fill="#fff" stroke="#fff" stroke-width="10" stroke-linejoin="round"/></svg>
+    <b>2A PRINTS ACCOUNTING</b>
+  </a>
+  <nav>
+    <a href="#features">What it does</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">Questions</a>
+    <a class="btn" id="navTrial" href="#download">Start free trial</a>
+  </nav>
+</header>
+
+<main id="top">
+<div class="hero">
+  <div>
+    <div class="eyebrow">Accounting software for Ghanaian businesses</div>
+    <h1>Books that already know your taxes.</h1>
+    <p class="lead">Invoices, stock, payments and expenses in one place, with NHIL, GETFund and VAT worked out and posted the way GRA expects. Use it on your computer or your phone.</p>
+    <div class="cta-row">
+      <a class="btn" id="dlBtn" href="#download">Download free trial</a>
+      <a class="btn ghost" id="webBtn" href="#">Open the web app</a>
+    </div>
+    <p class="fine">Windows, Mac, Linux, and any phone browser. No card needed to start.</p>
+  </div>
+
+  <div class="invoice" aria-label="Sample invoice totals">
+    <div class="top"><div><span>Invoice</span><br><b>INV/2026/0003</b></div><div><span>Date</span><br><b>13-09-2026</b></div></div>
+    <table class="items">
+      <tr><td>iPad</td><td class="q">12 &times; 1,500.00</td><td>18,000.00</td></tr>
+      <tr><td>Samsung Note 9</td><td class="q">2 &times; 900.00</td><td>1,800.00</td></tr>
+    </table>
+    <div class="tax">
+      <div class="sub"><span>Sub Total</span><span>&cent;19,800.00</span></div>
+      <div class="hl">
+        <div><span>NHIL (2.5%)</span><span>&cent;495.00</span></div>
+        <div><span>GETFund (2.5%)</span><span>&cent;495.00</span></div>
+        <div><span>VAT (15%)</span><span>&cent;2,970.00</span></div>
+      </div>
+      <div class="total"><span>Total</span><span>&cent;23,760.00</span></div>
+    </div>
+    <span class="tag">Sample invoice, taxes calculated automatically</span>
+  </div>
+</div>
+
+<section id="features">
+  <div class="eyebrow">What it does</div>
+  <h2>Everything a small business books in a month</h2>
+  <p class="sec-lead">Built around how Ghanaian shops, traders and service businesses actually keep their accounts.</p>
+  <div class="index">
+    <div><h3>Sales and purchase invoices</h3><p>Raise invoices and orders, record cash or credit, and print them in four designs with your logo.</p></div>
+    <div><h3>Payments and withholding tax</h3><p>Receive and make payments against specific invoices, with withholding tax and VAT withholding handled.</p></div>
+    <div><h3>Stock that adds up</h3><p>FIFO costing, stock take with repeat counts, and quick adjustments for damaged, expired or lost goods.</p></div>
+    <div><h3>Expenses and accruals</h3><p>Enter expenses, pay them later, and see what you owe each supplier at any time.</p></div>
+    <div><h3>GRA tax summary</h3><p>VAT, NHIL, GETFund and COVID-19 levy: output, input and net due for the period, from your own postings.</p></div>
+    <div><h3>Fixed assets, journals, bank reconciliation</h3><p>Asset register, manual journals with vouchers, and reconciliation against your bank statement.</p></div>
+    <div><h3>Several companies, several users</h3><p>Run more than one business under one login, and give each person only the screens they need.</p></div>
+    <div><h3>Export, print, share</h3><p>Every list exports to Excel or CSV and prints or saves as PDF.</p></div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="eyebrow">Run it anywhere</div>
+  <h2>On your desk or in your pocket</h2>
+  <p class="sec-lead">Your data is kept in the cloud and separated by company, so the same books open on every device.</p>
+  <div class="where">
+    <div><b>Windows</b><span>Installer with automatic updates</span><a class="btn" id="dlWin" href="#download">Download for Windows</a></div>
+    <div><b>Mac</b><span>Choose the version for your Mac</span><a class="btn" id="dlMacArm" href="#download">Apple chip (M1 or newer)</a><a class="btn ghost" id="dlMacIntel" href="#download">Intel Mac</a><small>Not sure? Apple menu, then About This Mac.</small></div>
+    <div><b>Linux</b><span>AppImage, nothing to install</span><a class="btn" id="dlLinux" href="#download">Download for Linux</a></div>
+    <div><b>Phone</b><span>Open the web app and add it to your home screen</span><a class="btn ghost" id="webBtn2" href="#download">Open the web app</a></div>
+  </div>
+  <div class="install">
+    <div><b>Windows</b>Open the file you downloaded. If Windows says it protected your PC, choose More info, then Run anyway.</div>
+    <div><b>Mac</b>Open the zip, then right-click the app and choose Open the first time. Confirm when asked.</div>
+    <div><b>Linux</b>Right-click the file, open Properties and allow running it as a program, then double-click it.</div>
+  </div>
+  <p class="note">New installs start on a free trial. The app updates itself when a new version is out.</p>
+</section>
+
+<section id="pricing">
+  <div class="eyebrow">Pricing</div>
+  <h2>Pay for the users and the time you need</h2>
+  <p class="sec-lead" id="priceLead">Each user costs a fixed amount a month. Add more users or choose a longer licence and the price per user goes down.</p>
+  <div class="calc">
+    <div class="panel">
+      <div class="row"><label for="calcUsers">Number of users</label><input id="calcUsers" type="number" inputmode="numeric" min="1" value="3"></div>
+      <div class="row"><label for="calcMonths">Licence period</label><select id="calcMonths"></select></div>
+      <ul class="inc"><li>All features</li><li>Free updates while your licence is valid</li><li>Support by WhatsApp and email</li></ul>
+    </div>
+    <div class="panel" aria-live="polite">
+      <div class="sub">Your price</div>
+      <div class="total" id="calcTotal">&nbsp;</div>
+      <div class="sub" id="calcMonthly"></div>
+      <div class="save" id="calcSave" hidden></div>
+      <ul class="lines" id="calcLines"></ul>
+      <div class="cta-row" style="margin-top:18px"><a class="btn" id="calcBtn" href="#pay">Request on WhatsApp</a><a class="btn ghost" id="calcMail" href="#pay">Request by email</a></div>
+      <p class="fine" id="calcMailNote"></p>
+    </div>
+  </div>
+  <div class="rates" id="rates"></div>
+  <div class="tablewrap"><table id="priceTable"></table></div>
+  <p class="note">Prices are in Ghana cedis. Message us to confirm your price before you pay. One licence belongs to one company, and your key is emailed once your payment is confirmed.</p>
+</section>
+
+<section id="pay">
+  <div class="eyebrow">How to pay</div>
+  <h2>Pay by Mobile Money, get your key by email</h2>
+  <div class="steps">
+    <div><b>1</b><h3>Choose your users and period</h3><p>Pick the number of users and the licence period above, then tap Request on WhatsApp, or Request by email, to send us your choice already filled in. We confirm the price.</p></div>
+    <div><b>2</b><h3>Pay and send the receipt</h3><p>Send the amount to the Mobile Money number below, using your company name as the reference. Send us the payment confirmation on WhatsApp.</p></div>
+    <div><b>3</b><h3>Receive your licence key</h3><p>Once we confirm the payment, your key is sent to your email. Paste it into the app and carry on.</p></div>
+  </div>
+  <div class="bank" id="bankBox" hidden></div>
+</section>
+
+<section id="faq">
+  <div class="eyebrow">Questions</div>
+  <h2>Before you buy</h2>
+  <div class="faq">
+    <details><summary>Can I try it first?</summary><p>Yes. Download it or open the web app, create your company and use it on the free trial. When you are ready, enter your licence key and carry on with the same data.</p></details>
+    <details><summary>How do I get a licence key?</summary><p>Message us your company name, the number of users and the period you want. We confirm the price, you pay by Mobile Money, and once the payment is confirmed your key is sent to your email. In the app, open the licence screen and paste it in. A key belongs to one company and lasts for the period you paid for.</p></details>
+    <details><summary>Is my business data kept separate from other companies?</summary><p>Yes. Each company's records are stored separately and only people you invite can open them.</p></details>
+    <details><summary>Does it handle NHIL, GETFund, VAT and withholding tax?</summary><p>Yes. Rates are set once in the admin area and applied to sales, purchases and expenses. Withholding tax and VAT withholding are supported on payments, and the tax summary reports VAT, NHIL, GETFund and COVID-19 levy.</p></details>
+    <details><summary>Windows says it protected my PC. Is the app safe?</summary><p>Windows shows this notice for any new program that has not built up a download history yet. Choose More info, then Run anyway. Your files are not touched, and your company data is kept in the cloud under your own login.</p></details>
+    <details><summary>Can I add more people later?</summary><p>Yes. Ask us to add users and you pay only the difference for the time left on your licence. Each person gets a role that decides which screens they can use.</p></details>
+    <details><summary>Can I move over from Excel?</summary><p>Yes. Add your customers, suppliers, products and opening balances, and carry on from there. Ask us if you want help setting up.</p></details>
+  </div>
+</section>
+
+<div class="closing" id="contact">
+  <div>
+    <h2>Ready to put your books in order?</h2>
+    <p>Start the free trial today, or talk to us about setting up your company.</p>
+    <div class="cta-row"><a class="btn" id="dlBtn3" href="#download">Download free trial</a><a class="btn ghost" id="waBtn" href="#contact">Talk to us</a></div>
+  </div>
+  <div class="contact" id="contactBox"></div>
+</div>
+</main>
+
+<footer>
+  <span>&copy; <span id="yr"></span> 2A Prints. All rights reserved.</span>
+  <span><a href="#" id="termsLink">Terms</a> &middot; <a href="#" id="privacyLink">Privacy</a> &middot; <a href="#" id="refundLink">Refunds</a></span>
+</footer>
+</div>
+
+<script>
+/* Edit this block before sharing the page. Prices below are placeholders, not final prices. */
+var CONFIG = {
+  /* Direct downloads: always the newest release. The file names must match the files attached to each release exactly. */
+  downloads: {
+    base:     "https://github.com/kingzizou/2A-Accounting-releases/releases/latest/download/",
+    win:      "2A-Prints-Accounting-Setup.exe",
+    macArm:   "2A-Prints-Accounting-mac-arm64.zip",
+    macIntel: "2A-Prints-Accounting-mac-x64.zip",
+    linux:    "2A-Prints-Accounting.AppImage"
+  },
+  webAppUrl:   "https://kingzizou.github.io/2A-Accounting-releases/",
+  buyUrl:      "",   /* optional online payment link; leave empty to use bank transfer + WhatsApp */
+  bank: { bankName:"Mobile Money", accountName:"Abdul Aziz Alhassan", accountNumber:"0546533134", branch:"" },  /* your bank details, shown under How to pay */
+  whatsapp:    "+233546533134",   /* e.g. +233 20 000 0000 */
+  email:       "zizouone96@gmail.com",   /* e.g. sales@yourdomain.com */
+  termsUrl:    "terms.html",
+  privacyUrl:  "privacy.html",
+  refundUrl:   "refund.html",
+  /* PRICING. perUserMonth is the price of one user for one month, in cedis.
+     userTiers: discount % on each user in that range (the 2nd and 3rd user cost less, and so on).
+     periodDiscounts: discount % on the whole price once the licence is at least that many months long.
+     The percentages below are a first suggestion. Change them to the discounts you want to give. */
+  pricing: {
+    perUserMonth: 100,
+    userTiers: [ {from:1,to:1,pct:0}, {from:2,to:3,pct:10}, {from:4,to:10,pct:20}, {from:11,to:null,pct:30} ],
+    periodDiscounts: [ {months:6,pct:5}, {months:12,pct:10}, {months:24,pct:20} ],
+    periods: [3,6,12,18,24,36],
+    maxUsers: 50   /* above this, the page asks the customer to message you */
+  }
+};
+(function(){
+  function set(id,href){var e=document.getElementById(id); if(e&&href) e.setAttribute("href",href);}
+  var D=CONFIG.downloads; set("dlWin",D.base+D.win); set("dlMacArm",D.base+D.macArm); set("dlMacIntel",D.base+D.macIntel); set("dlLinux",D.base+D.linux);
+  set("webBtn",CONFIG.webAppUrl); set("webBtn2",CONFIG.webAppUrl);
+  ["webBtn","webBtn2"].forEach(function(id){var e=document.getElementById(id); if(e&&/^https?:/.test(e.getAttribute("href")||"")){e.target="_blank"; e.rel="noopener";}});
+  document.getElementById("yr").textContent = new Date().getFullYear();
+  var wa = (CONFIG.whatsapp||"").replace(/[^0-9]/g,"");
+  var PR = CONFIG.pricing, CE = "\u00A2";
+  function money(n){ return CE + Math.round(n).toLocaleString("en-GH"); }
+  function tierPct(u){ for(var i=0;i<PR.userTiers.length;i++){ var t=PR.userTiers[i]; if(u>=t.from && (t.to===null || u<=t.to)) return t.pct; } return 0; }
+  function userMonthly(users){ var sum=0; for(var u=1;u<=users;u++){ sum += PR.perUserMonth*(100-tierPct(u))/100; } return sum; }
+  function periodPct(m){ var p=0; PR.periodDiscounts.forEach(function(d){ if(m>=d.months && d.pct>p) p=d.pct; }); return p; }
+  function periodLabel(m){ return m%12===0 ? (m/12)+(m===12?" year":" years") : m+" months"; }
+  function priceFor(users,m){ return userMonthly(users)*m*(100-periodPct(m))/100; }
+  function buyHref(users,m){
+    if(CONFIG.buyUrl) return CONFIG.buyUrl;
+    if(wa) return "https://wa.me/"+wa+"?text="+encodeURIComponent("Hello, I would like 2A Prints Accounting.\nCompany name: \nNumber of users: "+users+"\nLicence period: "+periodLabel(m)+"\nPrice on your website: "+money(priceFor(users,m)));
+    return "#pay";
+  }
+  function mailSet(users,m){
+    var a=document.getElementById("calcMail"), note=document.getElementById("calcMailNote");
+    if(!CONFIG.email){ a.style.display="none"; note.style.display="none"; return; }
+    var over = users>PR.maxUsers;
+    var body = "Hello, I would like 2A Prints Accounting.\nCompany name: \nNumber of users: "+users+"\nLicence period: "+periodLabel(m)+(over?"":"\nPrice on your website: "+money(priceFor(users,m)));
+    a.setAttribute("href","mailto:"+CONFIG.email+"?subject="+encodeURIComponent("Licence request: 2A Prints Accounting")+"&body="+encodeURIComponent(body));
+    note.innerHTML = "If the email button does not open, write to <b style=\"user-select:all\">"+CONFIG.email+"</b> with your company name, users and period.";
+  }
+  (function(){
+    var uEl=document.getElementById("calcUsers"), mEl=document.getElementById("calcMonths");
+    mEl.innerHTML = PR.periods.map(function(m){ var d=periodPct(m); return '<option value="'+m+'"'+(m===12?' selected':'')+'>'+periodLabel(m)+(d?' ('+d+'% off)':'')+'</option>'; }).join("");
+    document.getElementById("priceLead").textContent = "Each user costs "+money(PR.perUserMonth)+" a month. Add more users or choose a longer licence and the price per user goes down.";
+    function range(t){ return t.to===null ? "User "+t.from+" onward" : (t.from===t.to ? "User "+t.from : "Users "+t.from+" to "+t.to); }
+    document.getElementById("rates").innerHTML =
+      '<div><b>More users, lower price per user</b>'+PR.userTiers.map(function(t){ return range(t)+": "+(t.pct?t.pct+"% off":"full price"); }).join("<br>")+'</div>'+
+      '<div><b>Longer licence, lower price</b>'+PR.periodDiscounts.map(function(d){ return periodLabel(d.months)+" or more: "+d.pct+"% off"; }).join("<br>")+'</div>';
+    var ex=[1,3,5,10], exM=[6,12,24];
+    document.getElementById("priceTable").innerHTML = '<thead><tr><th>Users</th>'+exM.map(function(m){return '<th>'+periodLabel(m)+'</th>';}).join("")+'</tr></thead><tbody>'+
+      ex.map(function(u){ return '<tr><td>'+u+(u===1?' user':' users')+'</td>'+exM.map(function(m){return '<td>'+money(priceFor(u,m))+'</td>';}).join("")+'</tr>'; }).join("")+'</tbody>';
+    function draw(){
+      var users = Math.floor(Number(uEl.value)); var m = Number(mEl.value);
+      var tot=document.getElementById("calcTotal"), mon=document.getElementById("calcMonthly"), sv=document.getElementById("calcSave"), ln=document.getElementById("calcLines"), btn=document.getElementById("calcBtn");
+      if(!(users>=1)){ tot.textContent="\u2014"; mon.textContent="Enter at least 1 user."; sv.hidden=true; ln.innerHTML=""; btn.setAttribute("href","#pricing"); return; }
+      if(users>PR.maxUsers){ tot.textContent="Let\u2019s talk"; mon.textContent="For more than "+PR.maxUsers+" users, message us and we will quote you."; sv.hidden=true; ln.innerHTML=""; btn.setAttribute("href",buyHref(users,m)); mailSet(users,m); return; }
+      var total=priceFor(users,m), list=PR.perUserMonth*users*m, saved=list-total;
+      tot.textContent = money(total);
+      mon.textContent = money(total/m)+" a month for "+users+(users===1?" user":" users")+", for "+periodLabel(m);
+      sv.hidden = !(saved>=1); sv.textContent = "You save "+money(saved)+" against full price";
+      var rows=[];
+      PR.userTiers.forEach(function(t){
+        if(users<t.from) return;
+        var last = t.to===null ? users : Math.min(users,t.to);
+        var n = last-t.from+1, unit = PR.perUserMonth*(100-t.pct)/100;
+        rows.push('<li><span>'+(n===1?'User '+t.from:'Users '+t.from+' to '+last)+'</span><span>'+money(unit)+(n===1?'':' each')+' a month</span></li>');
+      });
+      if(periodPct(m)) rows.push('<li><span>Licence of '+periodLabel(m)+'</span><span>'+periodPct(m)+'% off the total</span></li>');
+      ln.innerHTML = rows.join("");
+      btn.setAttribute("href", buyHref(users,m));
+      mailSet(users,m);
+      if(btn.getAttribute("href").indexOf("http")===0){ btn.target="_blank"; btn.rel="noopener"; }
+    }
+    uEl.addEventListener("input",draw); mEl.addEventListener("change",draw); draw();
+  })();
+  var b = CONFIG.bank||{}, rows = [["Pay by",b.bankName],["Account name",b.accountName],["Mobile Money number",b.accountNumber],["Branch",b.branch]].filter(function(r){return r[1];});
+  if(rows.length){
+    var bb = document.getElementById("bankBox"); bb.hidden = false;
+    bb.innerHTML = rows.map(function(r){return '<div><span>'+r[0]+'</span><code>'+r[1]+'</code>'+(r[0]==="Mobile Money number"?'<br><button type="button" id="copyAcct">Copy</button>':'')+'</div>';}).join("");
+    var cbn = document.getElementById("copyAcct");
+    if(cbn) cbn.onclick = function(){ try{ navigator.clipboard.writeText(b.accountNumber).then(function(){cbn.textContent="Copied";}, function(){cbn.textContent="Select and copy";}); }catch(e){ cbn.textContent="Select and copy"; } };
+  }
+  var cb = document.getElementById("contactBox"), parts = [];
+  if(CONFIG.whatsapp) parts.push('<div><span>WhatsApp</span><br><code>'+CONFIG.whatsapp+'</code></div>');
+  if(CONFIG.email) parts.push('<div><span>Email</span><br><code>'+CONFIG.email+'</code></div>');
+  if(!parts.length){ cb.style.display="none"; document.getElementById("waBtn").style.display="none"; }
+  else cb.innerHTML = parts.join("");
+  if(CONFIG.termsUrl) set("termsLink",CONFIG.termsUrl); else document.getElementById("termsLink").removeAttribute("href");
+  if(CONFIG.refundUrl) set("refundLink",CONFIG.refundUrl); else document.getElementById("refundLink").removeAttribute("href");
+  if(CONFIG.privacyUrl) set("privacyLink",CONFIG.privacyUrl); else document.getElementById("privacyLink").removeAttribute("href");
+})();
+</script>
