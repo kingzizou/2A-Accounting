@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Saves THIS window (the page that calls it) to a PDF file the person picks, via the OS Save
   // dialog — no print dialog involved. pdfOptions matches Electron's webContents.printToPDF options
   // (e.g. { landscape: true }).
+  // Opens the print dialog for THIS window without the browser's date/title header and footer.
+  printPage: () => ipcRenderer.invoke('print-page'),
   saveAsPDF: (defaultName, pdfOptions) => ipcRenderer.invoke('save-as-pdf', defaultName, pdfOptions),
   // Saves arbitrary base64-encoded file content (e.g. an .xlsx workbook built in the page) to a file
   // the person picks, via the OS Save dialog.

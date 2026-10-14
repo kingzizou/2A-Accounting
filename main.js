@@ -83,6 +83,19 @@ ipcMain.handle('save-as-pdf', async (event, defaultName, pdfOptions) => {
   }
 });
 
+// Prints THIS window through the normal print dialog, but without Chrome's automatic date/title
+// header and URL footer (they only appear when header/footer strings are passed, so we don't pass any).
+// The page's own CSS supplies the "Page X of Y" number.
+ipcMain.handle('print-page', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return { ok: false, error: 'No window' };
+  return await new Promise((resolve) => {
+    win.webContents.print({ silent: false, printBackground: true }, (success, failureReason) => {
+      resolve(success ? { ok: true } : { ok: false, canceled: /cancel/i.test(failureReason || ''), error: failureReason });
+    });
+  });
+});
+
 // Generic "save this data to a file the person picks" — used for Excel (.xlsx) export, but written
 // generically (caller supplies the extension/filter) in case other export formats are added later.
 ipcMain.handle('save-binary-file', async (event, defaultName, base64Data, extension, typeLabel) => {

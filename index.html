@@ -170,10 +170,30 @@ label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-wei
 .settings-section{margin-bottom:26px}
 .settings-section h3{font-size:14px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 #themeBtn{border:none;background:none;font-size:17px;padding:6px}
+.rph{display:none}
+@page{margin:12mm 12mm 18mm;@bottom-center{content:"Page " counter(page) " of " counter(pages);font-family:Arial,sans-serif;font-size:10px;color:#555}}
+@media print{
+  .rph{display:block;margin:0 0 14px;text-align:center;color:#111}
+  .rph img{display:block;margin:0 auto 6px}
+  .rph .co{font-size:20px;font-weight:700}
+  .rph .sub{font-size:11.5px;color:#555;line-height:1.5;margin-top:3px}
+  .rph .banner{font-size:26px;font-weight:800;letter-spacing:6px;text-transform:uppercase;margin-top:12px;padding:8px 0;border-top:2px solid #111;border-bottom:2px solid #111}
+  .rph .asof{font-size:11px;color:#555;margin-top:6px}
+  #reportWrap.panel{border:none;box-shadow:none;padding:0}
+  #reportWrap h3{text-align:center;font-size:14px}
+}
 @media print{
   #sidebar,#topbar,.no-print{display:none !important}
-  #view{padding:0}
+  html,body{height:auto !important;overflow:visible !important}
+  #app,#main{display:block !important;height:auto !important;overflow:visible !important}
+  #view,#view.fixedhead,#view.fixedhead>*:last-child,#reportWrap,.panel{height:auto !important;max-height:none !important;overflow:visible !important}
+  #view.fixedhead{display:block !important}
+  #view .viewhead,#view .toolbar,#view>.toolbar,#view .actions{display:none !important}
+  #view{padding:0 !important}
   body{background:#fff}
+  #reportWrap table{page-break-inside:auto}
+  #reportWrap tr{page-break-inside:avoid}
+  #reportWrap thead{display:table-header-group}
 }
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
@@ -4878,6 +4898,7 @@ VIEW_RENDERERS.reports = function(view){
       <button class="btn small no-print" onclick="exportReportCsv()">⬇ Export CSV</button>
       <button class="btn small no-print" onclick="exportReportXlsx()">⬇ Export Excel (.xlsx)</button>
     </div>
+    <div id="reportPrintHead" class="rph"></div>
     <div class="panel pad" id="reportWrap"></div>`;
   renderReport();
 };
@@ -4929,7 +4950,7 @@ function printReport(){
   let styleTag = document.getElementById("printOrientTag");
   if(!styleTag){ styleTag = document.createElement("style"); styleTag.id="printOrientTag"; document.head.appendChild(styleTag); }
   styleTag.textContent = `@page { size: ${orient}; }`;
-  window.print();
+  if(window.electronAPI && window.electronAPI.printPage){ window.electronAPI.printPage(); } else { window.print(); }
 }
 function exportReportCsv(){
   const table = document.querySelector("#reportWrap table");
@@ -4958,7 +4979,15 @@ function exportReportXlsx(){
   const wb = XLSX.utils.table_to_book(table, {sheet:"Report"});
   XLSX.writeFile(wb, (document.getElementById("rep_kind").value||"report")+".xlsx");
 }
+function fillReportPrintHead(){
+  const el = document.getElementById("reportPrintHead"); if(!el) return;
+  const sel = document.getElementById("rep_kind");
+  const title = sel && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent.replace(/\s*\(.*\)\s*$/,"") : "Report";
+  const co = [esc(SETTINGS.address), [SETTINGS.phone1?esc(formatPhone(SETTINGS.phone1)):"", SETTINGS.phone2?esc(formatPhone(SETTINGS.phone2)):""].filter(Boolean).join(" / "), [SETTINGS.email?esc(SETTINGS.email):"", SETTINGS.website?esc(SETTINGS.website):""].filter(Boolean).join(" · "), SETTINGS.tin?`TIN: ${esc(SETTINGS.tin)}`:""].filter(Boolean).join("<br>");
+  el.innerHTML = `${docLogoHtml()}<div class="co">${esc(SETTINGS.companyName)}</div><div class="sub">${co}</div><div class="banner">${esc(title)}</div><div class="asof">Printed on ${fmtDate(today())}</div>`;
+}
 function renderReport(){
+  fillReportPrintHead();
   const kind = document.getElementById("rep_kind").value;
   const wrap = document.getElementById("reportWrap");
   const entityId = document.getElementById("rep_entity")?.value || "";
@@ -5746,7 +5775,7 @@ function printPreviewChrome(filename){
     @media print{ .pv-toolbar{display:none} }
   </style>
   <div class="pv-toolbar">
-    <button class="primary" onclick="window.print()">🖨 Print</button>
+    <button class="primary" onclick="if(window.electronAPI&&window.electronAPI.printPage){window.electronAPI.printPage();}else{window.print();}">🖨 Print</button>
     <button onclick="pvSaveAsPDF()">📄 Save as PDF</button>
     <span id="pvNote" style="align-self:center;font-size:12.5px;color:#16703a"></span>
   </div>
@@ -5834,6 +5863,7 @@ function docBaseCss(){
       table.items{font-size:12px}table.items td,table.items thead th{padding:8px 6px}
       .sheet.d-bold{padding:0 16px 22px}.d-bold .hdr{margin:0 -16px;padding:22px 16px}.d-bold .foot{margin:26px -16px -22px}
       .d-classic .hdr{align-items:center}.d-classic .title{text-align:center}
+      .doc-banner{font-size:24px;letter-spacing:6px}.d-bold .doc-banner{margin:0 -16px;padding:18px 16px 4px}
     }
     @page{size:A4;margin:12mm}
     @media print{body{padding:0;background:#fff}.sheet{box-shadow:none;border-radius:0;max-width:none;padding:8px 4px}}
@@ -5899,8 +5929,16 @@ function docDesignCss(){
     .d-minimal .amtbox .lbl,.d-minimal .amtbox .amt{color:#1a1a1a}.d-minimal .amtbox .amt{font-weight:300}
     .d-minimal .foot{border-top:none;text-align:left;color:var(--muted)}
     .d-minimal .foot b{color:var(--muted);font-weight:400;font-size:12.5px}
+    /* ===== Document title banner (INVOICE / SALES ORDER ...) ===== */
+    .title .t:empty{display:none}
+    .doc-banner{text-align:center;font-size:34px;font-weight:800;letter-spacing:10px;color:var(--accent);padding:6px 0 14px;margin:6px 0 16px;border-bottom:2px solid var(--accent);text-transform:uppercase;line-height:1.1}
+    .d-classic .doc-banner{font-size:30px;letter-spacing:12px;color:#111;border-bottom:3px double #111}
+    .d-bold .doc-banner{background:var(--accent);color:#fff;margin:0 -48px;padding:22px 48px 4px;border:none;letter-spacing:12px}
+    .d-bold .doc-banner+.hdr{padding-top:14px;border-top:none}
+    .d-minimal .doc-banner{font-weight:300;letter-spacing:14px;color:#1a1a1a;border-bottom:1px solid #1a1a1a}
     @media print{
       .sheet.d-bold{padding:0 4px}
+      .d-bold .doc-banner{margin:0 -4px;padding:22px 28px 4px}
       .d-bold .hdr{margin:0 -4px;padding:26px 28px}
       .d-bold .foot{margin:34px -4px 0}
       .sheet.d-classic{border:none}
@@ -5960,7 +5998,8 @@ function printDoc(kind, id, opts){
   win.document.write(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>${docLabel} ${esc(docNumber)}</title>${docPrintStyles()}</head><body>
     ${printPreviewChrome(docLabel.replace(/\s+/g,"_")+"_"+docNumber+".pdf")}
     <div class="sheet d-${design}">
-      ${docCompanyHeader(niceTitle, `No. <b>${esc(docNumber)}</b>`, badge)}
+      <div class="doc-banner">${niceTitle}</div>
+      ${docCompanyHeader("", `No. <b>${esc(docNumber)}</b>`, badge)}
       <div class="meta">
         ${docPartyBlock(party, partyName, isSale?"Billed To":"Supplier")}
         <div class="card"><div class="lbl">Details</div>
