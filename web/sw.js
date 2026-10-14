@@ -9,6 +9,7 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== location.origin) return;       // never touch Supabase / CDN calls
+  if (url.pathname.indexOf("/get/") !== -1) return;                          // the sales landing page lives at /get/ and is not part of the app
   const isPage = req.mode === "navigate" || url.pathname.endsWith("/index.html");
   if (isPage) {                                                              // network first so new versions arrive straight away
     e.respondWith(fetch(req).then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put("./index.html", copy)); return r; })
